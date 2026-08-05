@@ -6,7 +6,7 @@
 //
 // v1.04 - 5/15/14 - Fix signed vs. unsigned subtraction problem (noticed when compiled with gcc) in initEtc1Tables().
 //         This issue would cause an assert when this func. was called in debug. (Note this module was developed/testing with MSVC,
-//         I still need to test it throughly when compiled with gcc.)
+//         I still need to test it thoroughly when compiled with gcc.)
 //
 // v1.03 - 5/12/13 - Initial public release
 #include "Etc1.h"
@@ -2029,8 +2029,8 @@ foundPerfectMatch:
     block.mBytes[3] = static_cast<uint8_t>(((inten | (inten << 3)) << 2) | (diff << 1));
 
     const uint32_t etc1Selector = sSelectorIndexToEtc1[(bestX >> 4) & 3];
-    const uint16_t selectorWords0 = static_cast<uint16_t>((etc1Selector & 2) ? 0xFFFF : 0);
-    const uint16_t selectorWords1 = static_cast<uint16_t>((etc1Selector & 1) ? 0xFFFF : 0);
+    const auto selectorWords0 = static_cast<uint16_t>((etc1Selector & 2) ? 0xFFFF : 0);
+    const auto selectorWords1 = static_cast<uint16_t>((etc1Selector & 1) ? 0xFFFF : 0);
     std::memcpy(&block.mBytes[4], &selectorWords0, sizeof(selectorWords0));
     std::memcpy(&block.mBytes[6], &selectorWords1, sizeof(selectorWords1));
 
@@ -2170,8 +2170,8 @@ static void ditherBlock555(ColorQuad* dest, const ColorQuad* block) {
 
     // process channels seperately
     for (int ch = 0; ch < 3; ch++) {
-        const uint8_t* bp = std::bit_cast<const uint8_t*>(block);
-        uint8_t* dp = std::bit_cast<uint8_t*>(dest);
+        const auto* bp = std::bit_cast<const uint8_t*>(block);
+        auto* dp = std::bit_cast<uint8_t*>(dest);
 
         bp += ch;
         dp += ch;

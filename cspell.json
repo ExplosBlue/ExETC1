@@ -1,0 +1,40 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "allowCompoundWords": true,
+  "dictionaries": ["cpp", "softwareTerms"],
+  "words": [
+    "consteval",
+    "Ericsson",
+    "ETC",
+    "ETC1",
+    "etc1",
+    "Etc1",
+    "Etc1Block",
+    "Etc1IntenTables",
+    "Etc1Optimizer",
+    "Etc1PackParams",
+    "Etc1Quality",
+    "Etc1SolutionCoordinates",
+    "RGB",
+    "RGBA",
+    "SSSE3",
+    "AVX2",
+    "CCIR",
+    "luma"
+  ],
+  "flagWords": [],
+  "ignorePaths": [
+    ".cache/**",
+    ".git/**",
+    ".opencode/**",
+    "build/**"
+  ],
+  "enableFiletypes": [
+    "c",
+    "cpp",
+    "cmake",
+    "makefile",
+    "markdown"
+  ]
+}
