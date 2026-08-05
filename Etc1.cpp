@@ -408,8 +408,8 @@ static const std::array<u8, SelectorValues> sSelectorIndexToEtc1 = {3, 2, 0, 1};
 // packedColor whose decode equals the target is emitted. That makes the boundary values 0/255 keep
 // only the first of their clamp-saturated matches, and it reproduces the original hand-generated
 // tables bit for bit (order: diff, intenTable, packedColor, selector).
-// Decodes a packed ETC1 color to an 8-bit value; consteval so it also drives the compile-time table generation.
-consteval u32 decodeEtc1Config(u32 diff, u32 inten, u32 selector, u32 packedC) {
+// Decodes a packed ETC1 color to an 8-bit value; constexpr so it also drives the compile-time table generation.
+static constexpr u32 etc1DecodeValue(u32 diff, u32 inten, u32 selector, u32 packedC) {
     assert((diff < 2) && (inten < 8) && (selector < 4) && (packedC < (diff ? 32 : 16)));
     int c;
     if (diff) {
@@ -431,7 +431,7 @@ consteval void fillColor8ToEtcConfigRow(u32 target, std::array<u16, N>& row) {
             std::array<bool, SelectorValues> emitted{};
             for (u32 packedColor = 0; packedColor < packedLimit; packedColor++) {
                 for (u32 selector = 0; selector < SelectorValues; selector++) {
-                    if (!emitted[selector] && decodeEtc1Config(diff, inten, selector, packedColor) == target) {
+                    if (!emitted[selector] && etc1DecodeValue(diff, inten, selector, packedColor) == target) {
                         row[index++] = static_cast<u16>(diff | (inten << 1) | (selector << 4) | (packedColor << 8));
                         emitted[selector] = true;
                     }
@@ -460,10 +460,57 @@ consteval std::array<std::array<u16, 12>, 254> makeColor8ToEtcConfig1To254() {
 static constexpr auto sColor8ToEtcConfig0To255 = makeColor8ToEtcConfig0To255();
 static constexpr auto sColor8ToEtcConfig1To254 = makeColor8ToEtcConfig1To254();
 
-static std::array<u8, 256 + 16> sQuant5Tab; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables) // populated at runtime by initEtc1Tables()
+// Given an ETC1 diff/intenTable/selector, and an 8-bit desired color, encodes the best packedColor in
+// the low byte and its abs error in the high byte. Generated at compile time like the tables above.
+consteval std::array<std::array<u16, 256>, static_cast<std::size_t>(2) * 8 * 4> makeEtc1InverseLookup() {
+    std::array<std::array<u16, 256>, static_cast<std::size_t>(2) * 8 * 4> table{};
+    for (u32 diff = 0; diff < 2; diff++) {
+        const u32 limit = diff ? 32 : 16;
+        for (u32 inten = 0; inten < IntenModifierValues; inten++) {
+            for (u32 selector = 0; selector < SelectorValues; selector++) {
+                const u32 inverseTableIndex = diff + (inten << 1) + (selector << 4);
+                for (u32 color = 0; color < 256; color++) {
+                    u32 bestError = sUint32Max, bestPackedC = 0;
+                    for (u32 packedC = 0; packedC < limit; packedC++) {
+                        const u32 v = etc1DecodeValue(diff, inten, selector, packedC);
+                        const u32 err = v > color ? v - color : color - v;
+                        if (err < bestError) {
+                            bestError = err;
+                            bestPackedC = packedC;
+                            if (!bestError) {
+                                break;
+                            }
+                        }
+                    }
+                    assert(bestError <= 255);
+                    table[inverseTableIndex][color] = static_cast<u16>(bestPackedC | (bestError << 8));
+                }
+            }
+        }
+    }
+    return table;
+}
 
-// Given an ETC1 diff/intenTable/selector, and an 8-bit desired color, this table encodes the best packedColor in the low byte, and the abs error in the high byte.
-static std::array<std::array<u16, 256>, static_cast<std::size_t>(2) * 8 * 4> sEtc1InverseLookup; // [diff/intenTable/selector][desired_color] // NOLINT(cppcoreguidelines-avoid-non-const-global-variables) // populated at runtime by initEtc1Tables()
+static constexpr auto sEtc1InverseLookup = makeEtc1InverseLookup(); // [diff/intenTable/selector][desired_color]
+
+static constexpr int mul8Bit(int a, int b) {
+    const int t = a * b + 128;
+    return (t + (t >> 8)) >> 8;
+}
+
+// Maps a clamped 0..255 value to a 5-bit base color (expanded), offset so index 8 == value 0, for
+// 555 dithering. Generated at compile time.
+consteval std::array<u8, 256 + 16> makeQuant5Tab() {
+    std::array<u8, 256 + 16> tab{};
+    for (int i = 0; i < 256 + 16; i++) {
+        const int v = Etc1::clamp<int>(i - 8, 0, 255);
+        const int q = mul8Bit(v, 31);
+        tab[i] = static_cast<u8>((q << 3) | (q >> 2));
+    }
+    return tab;
+}
+
+static constexpr auto sQuant5Tab = makeQuant5Tab();
 
 struct Etc1Block {
     // big endian u64:
@@ -1322,14 +1369,13 @@ class Etc1Optimizer {
 // to the lowest table index between tables.
 using EvaluateIntenTablesFunc = void (*)(const ColorQuad*, const ColorQuad&, u64*, u8*);
 
-// Cached dispatch target, assigned by initEtc1Tables() so the inner evaluation has no
+// Cached dispatch target, lazily resolved once on first use so the inner evaluation has no
 // dispatch/CPU-feature cost. getEvaluateIntenTablesFunc() performs the one-time detection.
 static EvaluateIntenTablesFunc getEvaluateIntenTablesFunc();
 
-static EvaluateIntenTablesFunc sEvalIntenTables = nullptr; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables) // cached dispatch target set by initEtc1Tables()
-
 static inline EvaluateIntenTablesFunc getCachedEvalIntenTables() {
-    return sEvalIntenTables ? sEvalIntenTables : getEvaluateIntenTablesFunc();
+    static const EvaluateIntenTablesFunc cached = getEvaluateIntenTablesFunc();
+    return cached;
 }
 
 static u64 evaluateIntenTableScalar(const ColorQuad* srcPixels, const ColorQuad& baseColor, u32 intenTable, u8* selectors) {
@@ -1920,64 +1966,6 @@ bool Etc1Optimizer::evaluateSolutionFast(const Etc1SolutionCoordinates& coords, 
     return success;
 }
 
-static u32 etc1DecodeValue(u32 diff, u32 inten, u32 selector, u32 packedC) {
-    assert((diff < 2) && (inten < 8) && (selector < 4) && (packedC < (diff ? 32 : 16)));
-    int c;
-    if (diff) {
-        c = static_cast<int>(packedC >> 2) | static_cast<int>(packedC << 3);
-    } else {
-        c = static_cast<int>(packedC) | (static_cast<int>(packedC) << 4);
-    }
-    c += sEtc1IntenTables[inten][selector];
-    c = Etc1::clamp<int>(c, 0, 255);
-    return c;
-}
-
-static inline int mul8Bit(int a, int b) {
-    int t = a * b + 128;
-    return (t + (t >> 8)) >> 8;
-}
-
-void initEtc1Tables() {
-    for (u32 diff = 0; diff < 2; diff++) {
-        const u32 limit = diff ? 32 : 16;
-
-        for (u32 inten = 0; inten < 8; inten++) {
-            for (u32 selector = 0; selector < 4; selector++) {
-                const u32 inverseTableIndex = diff + (inten << 1) + (selector << 4);
-                for (u32 color = 0; color < 256; color++) {
-                    u32 bestError = sUint32Max, bestPackedC = 0;
-                    for (u32 packedC = 0; packedC < limit; packedC++) {
-                        int v = static_cast<int>(etc1DecodeValue(diff, inten, selector, packedC));
-                        u32 err = labs(v - static_cast<int>(color));
-                        if (err < bestError) {
-                            bestError = err;
-                            bestPackedC = packedC;
-                            if (!bestError) {
-                                break;
-                            }
-                        }
-                    }
-                    assert(bestError <= 255);
-                    sEtc1InverseLookup[inverseTableIndex][color] = static_cast<u16>(bestPackedC | (bestError << 8));
-                }
-            }
-        }
-    }
-
-    std::array<u32, 32> expand5;
-    for (int i = 0; i < 32; i++) {
-        expand5[i] = (i << 3) | (i >> 2);
-    }
-
-    for (int i = 0; i < 256 + 16; i++) {
-        int v = clamp<int>(i - 8, 0, 255);
-        sQuant5Tab[i] = static_cast<u8>(expand5[mul8Bit(v, 31)]);
-    }
-
-    sEvalIntenTables = getEvaluateIntenTablesFunc();
-}
-
 // Packs solid color blocks efficiently using a set of small precomputed tables.
 // For random 888 inputs, MSE results are better than Erricson's ETC1 packer in "slow" mode ~9.5% of the time, is slightly worse only ~.01% of the time, and is equal the rest of the time.
 static u64 packEtc1BlockSolidColor(Etc1Block& block, const u8* color, [[maybe_unused]] Etc1PackParams& packParams) {
@@ -2177,7 +2165,7 @@ static void ditherBlock555(ColorQuad* dest, const ColorQuad* block) {
     std::array<int, 8> err;
     int* ep1 = err.data();
     int* ep2 = err.data() + 4;
-    u8* quant = sQuant5Tab.data() + 8;
+    const u8* quant = sQuant5Tab.data() + 8;
 
     std::memset(dest, 0xFF, sizeof(ColorQuad) * 16);
 

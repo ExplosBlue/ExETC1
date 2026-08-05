@@ -40,9 +40,6 @@ struct Etc1PackParams {
 
 // ========================================================================== //
 
-// Important: initEtc1Tables() must be called before calling packEtc1Block().
-void initEtc1Tables();
-
 // Packs a 4x4 block of 32bpp RGBA pixels to an 8-byte ETC1 block.
 // 32-bit RGBA pixels must always be arranged as (R,G,B,A) (R first, A last) in memory, independent of platform endianness. A should always be 255.
 // Returns squared error of result.
