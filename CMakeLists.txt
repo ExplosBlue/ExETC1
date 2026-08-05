@@ -10,7 +10,7 @@ if(NOT CMAKE_CXX_STANDARD)
 endif()
 
 add_library(rg_etc1 STATIC
-    Etc1.cpp
+    etc1.cpp
 )
 
 add_library(rg_etc1::rg_etc1 ALIAS rg_etc1)
