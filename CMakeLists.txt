@@ -28,11 +28,6 @@ if(NOT MSVC)
         -Wno-class-memaccess
         -Wno-type-limits
     )
-    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        # The consteval sColor8ToEtcConfig*/sEtc1InverseLookup/sQuant5Tab generators
-        # exceed clang's default constexpr step budget.
-        target_compile_options(ex_etc1 PRIVATE -fconstexpr-steps=30000000)
-    endif()
 endif()
 
 # --------------------------------------------------------------------------

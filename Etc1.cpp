@@ -469,10 +469,15 @@ static const std::array<uint8_t, SelectorValues> sSelectorIndexToEtc1 = {3, 2, 0
 // packedColor whose decode equals the target is emitted. That makes the boundary values 0/255 keep
 // only the first of their clamp-saturated matches, and it reproduces the original hand-generated
 // tables bit for bit (order: diff, intenTable, packedColor, selector).
+//
+// Generation is split into small consteval units so it stays within clang's default constexpr
+// step budget: the per-config decode values are materialized once in sEtc1DecodeGrid, then both
+// config tables are filled in a single pass and the inverse lookup is built from the monotonic
+// grid rows (see makeEtc1InverseLookup).
 // Decodes a packed ETC1 color to an 8-bit value; constexpr so it also drives the compile-time table generation.
 static constexpr uint32_t etc1DecodeValue(uint32_t diff, uint32_t inten, uint32_t selector, uint32_t packedC) {
     assert((diff < 2) && (inten < 8) && (selector < 4) && (packedC < (diff ? 32 : 16)));
-    int c;
+    int c = 0;
     if (diff) {
         c = static_cast<int>(packedC >> 2) | static_cast<int>(packedC << 3);
     } else {
@@ -483,68 +488,109 @@ static constexpr uint32_t etc1DecodeValue(uint32_t diff, uint32_t inten, uint32_
     return c;
 }
 
-template <std::size_t N>
-consteval void fillColor8ToEtcConfigRow(uint32_t target, std::array<uint16_t, N>& row) {
-    uint32_t index = 0;
+// Materializes every (diff, intenTable, selector, packedColor) decode so the table generators
+// below avoid re-running the comparatively expensive per-config decode in their own consteval units.
+using EtcDecodeGrid = std::array<std::array<std::array<std::array<uint8_t, 32>, SelectorValues>, IntenModifierValues>, 2>;
+
+consteval EtcDecodeGrid makeEtc1DecodeGrid() {
+    EtcDecodeGrid grid{};
     for (uint32_t diff = 0; diff < 2; diff++) {
         const uint32_t packedLimit = diff ? 32U : 16U;
         for (uint32_t inten = 0; inten < IntenModifierValues; inten++) {
-            std::array<bool, SelectorValues> emitted{};
+            for (uint32_t selector = 0; selector < SelectorValues; selector++) {
+                for (uint32_t packedColor = 0; packedColor < packedLimit; packedColor++) {
+                    grid[diff][inten][selector][packedColor] = static_cast<uint8_t>(etc1DecodeValue(diff, inten, selector, packedColor));
+                }
+            }
+        }
+    }
+    return grid;
+}
+
+// One pass over every config; a per-(selector, target) emission guard keeps only the lowest
+// packedColor decoding to each target, so the 0/255 rows hold just their first clamp-saturated match.
+consteval void fillColor8ToEtcConfigRows(const EtcDecodeGrid& grid,
+                                         std::array<std::array<uint16_t, 33>, 2>& table0To255,
+                                         std::array<std::array<uint16_t, 12>, 254>& table1To254) {
+    std::array<uint32_t, 256> counts{};
+    for (uint32_t diff = 0; diff < 2; diff++) {
+        const uint32_t packedLimit = diff ? 32U : 16U;
+        for (uint32_t inten = 0; inten < IntenModifierValues; inten++) {
+            std::array<std::array<bool, 256>, SelectorValues> emitted{};
             for (uint32_t packedColor = 0; packedColor < packedLimit; packedColor++) {
                 for (uint32_t selector = 0; selector < SelectorValues; selector++) {
-                    if (!emitted[selector] && etc1DecodeValue(diff, inten, selector, packedColor) == target) {
-                        row[index++] = static_cast<uint16_t>(diff | (inten << 1) | (selector << 4) | (packedColor << 8));
-                        emitted[selector] = true;
+                    const uint32_t target = grid[diff][inten][selector][packedColor];
+                    if (emitted[selector][target]) {
+                        continue;
+                    }
+                    emitted[selector][target] = true;
+                    const auto entry = static_cast<uint16_t>(diff | (inten << 1) | (selector << 4) | (packedColor << 8));
+                    if (target == 0) {
+                        table0To255[0][counts[0]++] = entry;
+                    } else if (target == sColorChannelMax) {
+                        table0To255[1][counts[255]++] = entry;
+                    } else {
+                        table1To254[target - 1][counts[target]++] = entry;
                     }
                 }
             }
         }
     }
-    row[index] = sEtc1TableTerminator;
-}
-
-consteval std::array<std::array<uint16_t, 33>, 2> makeColor8ToEtcConfig0To255() {
-    std::array<std::array<uint16_t, 33>, 2> table{};
-    fillColor8ToEtcConfigRow(0, table[0]);
-    fillColor8ToEtcConfigRow(255, table[1]);
-    return table;
-}
-
-consteval std::array<std::array<uint16_t, 12>, 254> makeColor8ToEtcConfig1To254() {
-    std::array<std::array<uint16_t, 12>, 254> table{};
+    table0To255[0][counts[0]] = sEtc1TableTerminator;
+    table0To255[1][counts[255]] = sEtc1TableTerminator;
     for (uint32_t t = 1; t < 255; t++) {
-        fillColor8ToEtcConfigRow(t, table[t - 1]);
+        table1To254[t - 1][counts[t]] = sEtc1TableTerminator;
     }
-    return table;
 }
 
-static constexpr auto sColor8ToEtcConfig0To255 = makeColor8ToEtcConfig0To255();
-static constexpr auto sColor8ToEtcConfig1To254 = makeColor8ToEtcConfig1To254();
+struct EtcColorConfigTables {
+    std::array<std::array<uint16_t, 33>, 2> to0To255;
+    std::array<std::array<uint16_t, 12>, 254> to1To254;
+};
+
+consteval EtcColorConfigTables makeColor8ToEtcConfigTables(const EtcDecodeGrid& grid) {
+    EtcColorConfigTables tables{};
+    fillColor8ToEtcConfigRows(grid, tables.to0To255, tables.to1To254);
+    return tables;
+}
+
+static constexpr auto sEtc1DecodeGrid = makeEtc1DecodeGrid();
+static constexpr auto sEtcColorConfigTables = makeColor8ToEtcConfigTables(sEtc1DecodeGrid);
+static constexpr auto sColor8ToEtcConfig0To255 = sEtcColorConfigTables.to0To255;
+static constexpr auto sColor8ToEtcConfig1To254 = sEtcColorConfigTables.to1To254;
 
 // Given an ETC1 diff/intenTable/selector, and an 8-bit desired color, encodes the best packedColor in
 // the low byte and its abs error in the high byte. Generated at compile time like the tables above.
-consteval std::array<std::array<uint16_t, 256>, static_cast<std::size_t>(2) * 8 * 4> makeEtc1InverseLookup() {
-    std::array<std::array<uint16_t, 256>, static_cast<std::size_t>(2) * 8 * 4> table{};
+// The decode grid rows are monotonic, so each color is assigned to its nearest distinct decode value
+// (ties going to the lower packedColor, matching the original ascending scan) without a per-color scan.
+consteval std::array<std::array<uint16_t, 256>, static_cast<std::size_t>(2) * IntenModifierValues * SelectorValues> makeEtc1InverseLookup(const EtcDecodeGrid& grid) {
+    std::array<std::array<uint16_t, 256>, static_cast<std::size_t>(2) * IntenModifierValues * SelectorValues> table{};
     for (uint32_t diff = 0; diff < 2; diff++) {
         const uint32_t limit = diff ? 32 : 16;
         for (uint32_t inten = 0; inten < IntenModifierValues; inten++) {
             for (uint32_t selector = 0; selector < SelectorValues; selector++) {
                 const uint32_t inverseTableIndex = diff + (inten << 1) + (selector << 4);
-                for (uint32_t color = 0; color < 256; color++) {
-                    uint32_t bestError = sUint32Max, bestPackedC = 0;
-                    for (uint32_t packedC = 0; packedC < limit; packedC++) {
-                        const uint32_t v = etc1DecodeValue(diff, inten, selector, packedC);
-                        const uint32_t err = v > color ? v - color : color - v;
-                        if (err < bestError) {
-                            bestError = err;
-                            bestPackedC = packedC;
-                            if (!bestError) {
-                                break;
-                            }
-                        }
+                auto& row = table[inverseTableIndex];
+                uint32_t rangeStart = 0;
+                uint32_t prevPackedC = 0;
+                uint32_t prevValue = grid[diff][inten][selector][0];
+                for (uint32_t packedC = 1; packedC < limit; packedC++) {
+                    const uint32_t value = grid[diff][inten][selector][packedC];
+                    if (value == prevValue) {
+                        continue;
                     }
-                    assert(bestError <= 255);
-                    table[inverseTableIndex][color] = static_cast<uint16_t>(bestPackedC | (bestError << 8));
+                    const uint32_t split = (prevValue + value) / 2;
+                    for (uint32_t color = rangeStart; color <= split; color++) {
+                        const uint32_t err = color > prevValue ? color - prevValue : prevValue - color;
+                        row[color] = static_cast<uint16_t>(prevPackedC | (err << 8));
+                    }
+                    rangeStart = split + 1;
+                    prevPackedC = packedC;
+                    prevValue = value;
+                }
+                for (uint32_t color = rangeStart; color < 256; color++) {
+                    const uint32_t err = color > prevValue ? color - prevValue : prevValue - color;
+                    row[color] = static_cast<uint16_t>(prevPackedC | (err << 8));
                 }
             }
         }
@@ -552,7 +598,7 @@ consteval std::array<std::array<uint16_t, 256>, static_cast<std::size_t>(2) * 8 
     return table;
 }
 
-static constexpr auto sEtc1InverseLookup = makeEtc1InverseLookup(); // [diff/intenTable/selector][desired_color]
+static constexpr auto sEtc1InverseLookup = makeEtc1InverseLookup(sEtc1DecodeGrid); // [diff/intenTable/selector][desired_color]
 
 static constexpr int mul8Bit(int a, int b) {
     const int t = a * b + 128;
@@ -803,7 +849,7 @@ T* indirectRadixSort(uint32_t numIndices, T* indices0, T* indices1, const Q* key
         }
     }
 
-    std::array<uint32_t, sHistogramBins * 4> hist;
+    std::array<uint32_t, static_cast<std::size_t>(sHistogramBins) * 4> hist;
 
     std::memset(hist.data(), 0, sizeof(hist[0]) * sHistogramBins * keySize);
 
@@ -1817,7 +1863,7 @@ void Etc1Optimizer::init(const Params& p, Results& r) {
 
     const uint32_t n = sSubblockPixels;
 
-    mLimit = mParams->mUseColor4 ? sBaseColor4Max : sBaseColor5Max;
+    mLimit = static_cast<int>(mParams->mUseColor4 ? sBaseColor4Max : sBaseColor5Max);
 
     Vec3F avgColor(0.0f);
 
@@ -2219,7 +2265,7 @@ foundPerfectMatch:
     results.mN = numColors;
     results.mBlockColor4 = !(bestX & 1);
     results.mBlockIntenTable = (bestX >> 1) & sIntenMask;
-    std::memset(results.mSelectors, (bestX >> 4) & sSelectorMask, numColors);
+    std::memset(results.mSelectors, static_cast<int>((bestX >> 4) & sSelectorMask), numColors);
 
     const uint32_t bestPackedC0 = etcConfigBase(static_cast<uint32_t>(bestX));
     results.mBlockColorUnscaled[bestI] = static_cast<uint8_t>(bestPackedC0);
@@ -2342,8 +2388,8 @@ uint32_t packEtc1Block(void* etc1Block, const uint32_t* srcPixelsRgba, Etc1PackP
                     const ColorQuad* srcCol = srcPixels + static_cast<size_t>(subblock) * 2;
                     subblockPixels[0] = srcCol[0];
                     subblockPixels[1] = srcCol[sBlockWidth];
-                    subblockPixels[2] = srcCol[2 * sBlockWidth];
-                    subblockPixels[3] = srcCol[3 * sBlockWidth];
+                    subblockPixels[2] = srcCol[static_cast<std::size_t>(2) * sBlockWidth];
+                    subblockPixels[3] = srcCol[static_cast<std::size_t>(3) * sBlockWidth];
                     subblockPixels[4] = srcCol[1];
                     subblockPixels[5] = srcCol[1 + sBlockWidth];
                     subblockPixels[6] = srcCol[1 + 2 * sBlockWidth];
