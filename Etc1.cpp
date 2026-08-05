@@ -34,7 +34,6 @@ constexpr bool sBuildDebug = false;
 #endif
 
 namespace Etc1 {
-// NOLINTBEGIN(cert-dcl03-c) // clang-tidy 22.1.8 fires on runtime asserts (argc>0, loop guards) and its static_assert autofix would not compile; every assert() here is a runtime invariant.
 constexpr uint32_t sUint32Max = std::numeric_limits<uint32_t>::max();
 constexpr uint64_t sUint64Max = std::numeric_limits<uint64_t>::max();
 
@@ -159,7 +158,6 @@ struct ColorQuad {
         NumComps = 4
     };
 
-    // NOLINTBEGIN(cppcoreguidelines-pro-type-union-access,clang-diagnostic-gnu-anonymous-struct,clang-diagnostic-nested-anon-types,cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
     union {
         struct
         {
@@ -169,11 +167,10 @@ struct ColorQuad {
             Component a;
         };
 
-        Component c[NumComps];
+        std::array<Component, NumComps> c;
 
         uint32_t mU32;
     };
-    // NOLINTEND(cppcoreguidelines-pro-type-union-access,clang-diagnostic-gnu-anonymous-struct,clang-diagnostic-nested-anon-types,cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
 
     inline ColorQuad() {
     }
@@ -1537,8 +1534,7 @@ static void evaluateIntenTablesSsse3(const ColorQuad* srcPixels, const ColorQuad
 
     const __m128i zero = _mm_setzero_si128();
 
-    // NOLINTBEGIN(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays) // __m128i in std::array triggers GCC -Wignored-attributes
-    __m128i pxv[4];
+    std::array<__m128i, 4> pxv;
     pxv[0] = _mm_unpacklo_epi8(_mm_shuffle_epi8(px01, shuf01), zero); // pixels 0,1
     pxv[1] = _mm_unpacklo_epi8(_mm_shuffle_epi8(px01, shuf23), zero); // pixels 2,3
     pxv[2] = _mm_unpacklo_epi8(_mm_shuffle_epi8(px23, shuf01), zero); // pixels 4,5
@@ -1552,7 +1548,7 @@ static void evaluateIntenTablesSsse3(const ColorQuad* srcPixels, const ColorQuad
     for (uint32_t t = 0; t < IntenModifierValues; t++) {
         const int* inten = sEtc1IntenTables[t].data();
 
-        __m128i cvec[4];
+        std::array<__m128i, 4> cvec;
         for (uint32_t s = 0; s < 4; s++) {
             const __m128i ydv = _mm_set1_epi16(static_cast<short>(inten[s]));
             __m128i c = _mm_and_si128(_mm_add_epi16(base16, ydv), kMask);
@@ -1561,8 +1557,8 @@ static void evaluateIntenTablesSsse3(const ColorQuad* srcPixels, const ColorQuad
             cvec[s] = c;
         }
 
-        __m128i bestErr[4];
-        __m128i bestSel[4];
+        std::array<__m128i, 4> bestErr;
+        std::array<__m128i, 4> bestSel;
 
         // Selector 0 seeds the argmin state.
         for (uint32_t v = 0; v < 4; v++) {
@@ -1600,7 +1596,6 @@ static void evaluateIntenTablesSsse3(const ColorQuad* srcPixels, const ColorQuad
         }
         errors[t] = totalError;
     }
-    // NOLINTEND(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
 }
 
 // Same algorithm, but 4 pixels per 256-bit register. Uses _mm_min_epi32 for the error side of the
@@ -1614,8 +1609,7 @@ static void evaluateIntenTablesAvx2(const ColorQuad* srcPixels, const ColorQuad&
     const __m128i shuf4 = _mm_setr_epi8(0, 1, 2, static_cast<char>(0x80), 4, 5, 6, static_cast<char>(0x80), 8, 9, 10, static_cast<char>(0x80), 12, 13, 14, static_cast<char>(0x80));
     const __m256i zero = _mm256_setzero_si256();
 
-    // NOLINTBEGIN(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays) // __m256i in std::array triggers GCC -Wignored-attributes
-    __m256i pxv[2];
+    std::array<__m256i, 2> pxv;
     pxv[0] = _mm256_cvtepu8_epi16(_mm_shuffle_epi8(px01, shuf4)); // pixels 0..3
     pxv[1] = _mm256_cvtepu8_epi16(_mm_shuffle_epi8(px23, shuf4)); // pixels 4..7
 
@@ -1630,7 +1624,7 @@ static void evaluateIntenTablesAvx2(const ColorQuad* srcPixels, const ColorQuad&
     for (uint32_t t = 0; t < IntenModifierValues; t++) {
         const int* inten = sEtc1IntenTables[t].data();
 
-        __m256i cvec[4];
+        std::array<__m256i, 4> cvec;
         for (uint32_t s = 0; s < 4; s++) {
             const __m256i ydv = _mm256_set1_epi16(static_cast<short>(inten[s]));
             __m256i c = _mm256_and_si256(_mm256_add_epi16(base256, ydv), kMask);
@@ -1639,8 +1633,8 @@ static void evaluateIntenTablesAvx2(const ColorQuad* srcPixels, const ColorQuad&
             cvec[s] = c;
         }
 
-        __m256i bestErr[2];
-        __m256i bestSel[2];
+        std::array<__m256i, 2> bestErr;
+        std::array<__m256i, 2> bestSel;
 
         // Selector 0 seeds the argmin state.
         for (uint32_t v = 0; v < 2; v++) {
@@ -1680,7 +1674,6 @@ static void evaluateIntenTablesAvx2(const ColorQuad* srcPixels, const ColorQuad&
         }
         errors[t] = totalError;
     }
-    // NOLINTEND(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
 }
 #endif // __GNUC__ || __clang__
 
@@ -2580,5 +2573,4 @@ uint32_t packEtc1Block(void* etc1Block, const uint32_t* srcPixelsRgba, Etc1PackP
 
     return static_cast<uint32_t>(bestError);
 }
-// NOLINTEND(cert-dcl03-c)
 } // namespace Etc1

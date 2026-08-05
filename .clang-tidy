@@ -1,3 +1,5 @@
+# cert-dcl03-c (use static_assert instead of assert) is disabled: every assert() condition in Etc1.cpp
+# is a runtime invariant (clamp bounds, bit-field shifts, loop guards) where static_assert cannot apply.
 Checks: 
   -*,
   
@@ -53,6 +55,7 @@ Checks:
   bugprone-virtual-near-miss,
 
   cert-*,
+  -cert-dcl03-c,
   clang-*,
 
   cppcoreguidelines-avoid-c-arrays,

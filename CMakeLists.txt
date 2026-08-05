@@ -27,6 +27,7 @@ if(NOT MSVC)
         -Wno-pedantic
         -Wno-class-memaccess
         -Wno-type-limits
+        -Wno-ignored-attributes # std::array<__m128i/__m256i> in the SSE paths
     )
 endif()
 

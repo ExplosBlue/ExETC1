@@ -8,6 +8,7 @@
     "CCIR",
     "cmpgt",
     "consteval",
+    "cstyle",
     "cvtsi",
     "DCMAKE",
     "Ericsson",
@@ -28,16 +29,16 @@
     "RGB",
     "RGBA",
     "RMSE",
+    "roundings",
     "seldv",
     "setr",
     "shuf",
     "SSSE3",
+    "undelegated",
     "Wignored",
     "unpacklo",
     "cvtepu8",
-    "blendv",
-    "NOLINTBEGIN",
-    "NOLINTEND"
+    "blendv"
   ],
   "flagWords": [],
   "ignorePaths": [
