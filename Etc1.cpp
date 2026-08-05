@@ -34,31 +34,33 @@ constexpr bool sBuildDebug = false;
 #endif
 
 namespace Etc1 {
+
 constexpr uint32_t sUint32Max = std::numeric_limits<uint32_t>::max();
 constexpr uint64_t sUint64Max = std::numeric_limits<uint64_t>::max();
 
 // ---------------------------------------------------------------------------
 // ETC1 block format constants.
 // ---------------------------------------------------------------------------
-constexpr uint32_t sBlockWidth = 4;                  // block width in pixels
-constexpr uint32_t sBlockHeight = 4;                 // block height in pixels
-constexpr uint32_t sPixelsPerBlock = sBlockWidth * sBlockHeight; // 4x4 == 16 pixels
-constexpr uint32_t sSubblockPixels = 8;              // 4x2 pixels per subblock
-constexpr uint32_t sBlockBytes = 8;                  // each block packs to 8 bytes
-constexpr uint32_t sBitsPerByte = 8;                 // bits per byte (and per 8-bit channel)
-constexpr uint32_t sBitsPerByteLog2 = 3;             // exponent such that 1 << sBitsPerByteLog2 == sBitsPerByte
-constexpr uint32_t sByteMask = 0xFF;                 // low byte mask
-constexpr uint32_t sColorChannelMax = 255;           // largest 8-bit channel value
-constexpr uint32_t sBaseColor4Bits = 4;              // individual-mode base color precision
-constexpr uint32_t sBaseColor4Max = 15;              // 2^sBaseColor4Bits - 1
-constexpr uint32_t sBaseColor5Bits = 5;              // differential-mode base color precision
-constexpr uint32_t sBaseColor5Max = 31;              // 2^sBaseColor5Bits - 1
-constexpr uint32_t sDelta3Bits = 3;                  // differential delta color precision
-constexpr uint32_t sDelta3Mask = 7;                  // 2^sDelta3Bits - 1
-constexpr uint32_t sIntenMask = 7;                   // 3-bit intensity table index mask
-constexpr uint32_t sSelectorMask = 3;                // 2-bit selector mask
-constexpr uint32_t sHistogramBins = 256;             // radix sort: one histogram bin per byte value
-constexpr uint16_t sEtc1TableTerminator = 0xFFFF;    // marks the end of a packed lookup-table row
+
+constexpr uint32_t sBlockWidth = 4;                                 // block width in pixels
+constexpr uint32_t sBlockHeight = 4;                                // block height in pixels
+constexpr uint32_t sPixelsPerBlock = sBlockWidth * sBlockHeight;    // 4x4 == 16 pixels
+constexpr uint32_t sSubblockPixels = 8;                             // 4x2 pixels per subblock
+constexpr uint32_t sBlockBytes = 8;                                 // each block packs to 8 bytes
+constexpr uint32_t sBitsPerByte = 8;                                // bits per byte (and per 8-bit channel)
+constexpr uint32_t sBitsPerByteLog2 = 3;                            // exponent such that 1 << sBitsPerByteLog2 == sBitsPerByte
+constexpr uint32_t sByteMask = 0xFF;                                // low byte mask
+constexpr uint32_t sColorChannelMax = 255;                          // largest 8-bit channel value
+constexpr uint32_t sBaseColor4Bits = 4;                             // individual-mode base color precision
+constexpr uint32_t sBaseColor4Max = 15;                             // 2^sBaseColor4Bits - 1
+constexpr uint32_t sBaseColor5Bits = 5;                             // differential-mode base color precision
+constexpr uint32_t sBaseColor5Max = 31;                             // 2^sBaseColor5Bits - 1
+constexpr uint32_t sDelta3Bits = 3;                                 // differential delta color precision
+constexpr uint32_t sDelta3Mask = 7;                                 // 2^sDelta3Bits - 1
+constexpr uint32_t sIntenMask = 7;                                  // 3-bit intensity table index mask
+constexpr uint32_t sSelectorMask = 3;                               // 2-bit selector mask
+constexpr uint32_t sHistogramBins = 256;                            // radix sort: one histogram bin per byte value
+constexpr uint16_t sEtc1TableTerminator = 0xFFFF;                   // marks the end of a packed lookup-table row
 
 // ---------------------------------------------------------------------------
 // Color channel pack/unpack helpers.
@@ -143,14 +145,14 @@ struct ColorQuad {
 
     struct ComponentTraits {
         enum {
-            Signed = false,
-            Float = false,
-            Min = 0U,
-            Max = sColorChannelMax
+            Signed  = false,
+            Float   = false,
+            Min     = 0U,
+            Max     = sColorChannelMax
         };
     };
 
-    public:
+public:
     using Component = unsigned char;
     using Parameter = int;
 
@@ -172,8 +174,7 @@ struct ColorQuad {
         uint32_t mU32;
     };
 
-    inline ColorQuad() {
-    }
+    inline ColorQuad() {}
 
     inline ColorQuad(const ColorQuad& other) = default;
 
@@ -279,9 +280,7 @@ struct ColorQuad {
 
     inline ColorQuad& setComponent(uint32_t i, Parameter f) {
         assert(i < NumComps);
-
         c[i] = static_cast<Component>(clamp(f));
-
         return *this;
     }
 
@@ -307,7 +306,7 @@ struct ColorQuad {
         return *this;
     }
 
-    // Returns CCIR 601 luma (consistent with color_utils::RGB_To_Y).
+    // Returns CCIR 601 luma.
     inline Parameter getLuma() const {
         return static_cast<Parameter>((19595U * r + 38470U * g + 7471U * b + 32768U) >> 16U);
     }
@@ -360,15 +359,18 @@ struct ColorQuad {
     }
 }; // class ColorQuad
 
+
 struct Vec3F {
     std::array<float, 3> mS;
 
     inline Vec3F() = default;
+
     inline Vec3F(float s) {
         mS[0] = s;
         mS[1] = s;
         mS[2] = s;
     }
+
     inline Vec3F(float x, float y, float z) {
         mS[0] = x;
         mS[1] = y;
@@ -393,17 +395,18 @@ struct Vec3F {
         }
         return *this;
     }
-};
+}; // struct Vec3F
+
 
 enum EtcConstants {
     BytesPerBlock = 8U,
 
-    SelectorBits = 2U,
+    SelectorBits   = 2U,
     SelectorValues = 1U << SelectorBits,
-    SelectorMask = SelectorValues - 1U,
+    SelectorMask   = SelectorValues - 1U,
 
     BlockShift = 2U,
-    BlockSize = 1U << BlockShift,
+    BlockSize  = 1U << BlockShift,
 
     LSBSelectorIndicesBitOffset = 0,
     MSBSelectorIndicesBitOffset = 16,
@@ -411,18 +414,18 @@ enum EtcConstants {
     FlipBitOffset = 32,
     DiffBitOffset = 33,
 
-    IntenModifierNumBits = 3,
-    IntenModifierValues = 1 << IntenModifierNumBits,
+    IntenModifierNumBits             = 3,
+    IntenModifierValues              = 1 << IntenModifierNumBits,
     RightIntenModifierTableBitOffset = 34,
-    LeftIntenModifierTableBitOffset = 37,
+    LeftIntenModifierTableBitOffset  = 37,
 
     // Base+Delta encoding (5 bit bases, 3 bit delta)
     BaseColorCompNumBits = 5,
-    BaseColorCompMax = 1 << BaseColorCompNumBits,
+    BaseColorCompMax     = 1 << BaseColorCompNumBits,
 
     DeltaColorCompNumBits = 3,
-    DeltaColorComp = 1 << DeltaColorCompNumBits,
-    DeltaColorCompMax = 1 << DeltaColorCompNumBits,
+    DeltaColorComp        = 1 << DeltaColorCompNumBits,
+    DeltaColorCompMax     = 1 << DeltaColorCompNumBits,
 
     BaseColor5RBitOffset = 59,
     BaseColor5GBitOffset = 51,
@@ -434,7 +437,7 @@ enum EtcConstants {
 
     // Absolute (non-delta) encoding (two 4-bit per component bases)
     AbsColorCompNumBits = 4,
-    AbsColorCompMax = 1 << AbsColorCompNumBits,
+    AbsColorCompMax     = 1 << AbsColorCompNumBits,
 
     AbsColor4R1BitOffset = 60,
     AbsColor4G1BitOffset = 52,
@@ -446,14 +449,13 @@ enum EtcConstants {
 
     ColorDeltaMin = -4,
     ColorDeltaMax = 3,
+}; // EtcConstants
 
-    // Delta3:
-    // 0   1   2   3   4   5   6   7
-    // 000 001 010 011 100 101 110 111
-    // 0   1   2   3   -4  -3  -2  -1
-};
 
-static constexpr std::array<std::array<int32_t, SelectorValues>, IntenModifierValues> sEtc1IntenTables = {{{{-8, -2, 2, 8}}, {{-17, -5, 5, 17}}, {{-29, -9, 9, 29}}, {{-42, -13, 13, 42}}, {{-60, -18, 18, 60}}, {{-80, -24, 24, 80}}, {{-106, -33, 33, 106}}, {{-183, -47, 47, 183}}}};
+static constexpr std::array<std::array<int32_t, SelectorValues>, IntenModifierValues> sEtc1IntenTables = {{
+    {{ -8,  -2,  2,  8}}, {{-17,  -5,  5, 17}}, {{-29,   -9,  9,  29}}, {{-42,  -13, 13,  42}},
+    {{-60, -18, 18, 60}}, {{-80, -24, 24, 80}}, {{-106, -33, 33, 106}}, {{-183, -47, 47, 183}}
+}};
 
 static const std::array<uint8_t, SelectorValues> sEtc1ToSelectorIndex = {2, 3, 1, 0};
 static const std::array<uint8_t, SelectorValues> sSelectorIndexToEtc1 = {3, 2, 0, 1};
@@ -506,9 +508,7 @@ consteval EtcDecodeGrid makeEtc1DecodeGrid() {
 
 // One pass over every config; a per-(selector, target) emission guard keeps only the lowest
 // packedColor decoding to each target, so the 0/255 rows hold just their first clamp-saturated match.
-consteval void fillColor8ToEtcConfigRows(const EtcDecodeGrid& grid,
-                                         std::array<std::array<uint16_t, 33>, 2>& table0To255,
-                                         std::array<std::array<uint16_t, 12>, 254>& table1To254) {
+consteval void fillColor8ToEtcConfigRows(const EtcDecodeGrid& grid, std::array<std::array<uint16_t, 33>, 2>& table0To255, std::array<std::array<uint16_t, 12>, 254>& table1To254) {
     std::array<uint32_t, 256> counts{};
     for (uint32_t diff = 0; diff < 2; diff++) {
         const uint32_t packedLimit = diff ? 32U : 16U;
@@ -1014,7 +1014,13 @@ ColorQuad Etc1Block::unpackColor5(uint16_t packedColor5, bool scaled, uint32_t a
         channels.r = scaleColor5To8(channels.r);
     }
 
-    return {NoClamp, static_cast<int>(channels.r), static_cast<int>(channels.g), static_cast<int>(channels.b), static_cast<int>(Etc1::minimum(alpha, sColorChannelMax))};
+    return {
+        NoClamp,
+        static_cast<int>(channels.r),
+        static_cast<int>(channels.g),
+        static_cast<int>(channels.b),
+        static_cast<int>(Etc1::minimum(alpha, sColorChannelMax))
+    };
 }
 
 void Etc1Block::unpackColor5(uint32_t& r, uint32_t& g, uint32_t& b, uint16_t packedColor5, bool scaled) {
@@ -1119,7 +1125,13 @@ ColorQuad Etc1Block::unpackColor4(uint16_t packedColor4, bool scaled, uint32_t a
         channels.r = scaleColor4To8(channels.r);
     }
 
-    return {NoClamp, static_cast<int>(channels.r), static_cast<int>(channels.g), static_cast<int>(channels.b), static_cast<int>(Etc1::minimum(alpha, sColorChannelMax))};
+    return {
+        NoClamp,
+        static_cast<int>(channels.r),
+        static_cast<int>(channels.g),
+        static_cast<int>(channels.b),
+        static_cast<int>(Etc1::minimum(alpha, sColorChannelMax))
+    };
 }
 
 void Etc1Block::unpackColor4(uint32_t& r, uint32_t& g, uint32_t& b, uint16_t packedColor4, bool scaled) {
@@ -1200,10 +1212,7 @@ void Etc1Block::getAbsSubblockColors(ColorQuad* dst, uint16_t packedColor4, uint
 // Writes one 4-pixel row of a decoded block. When flipped, the top two rows come from subblock 0
 // and the bottom two from subblock 1; otherwise the left two pixels come from subblock 0 and the
 // right two from subblock 1. preserveAlpha selects setRgb (keep dst alpha) vs. full assignment.
-static void writeSubblockRow(ColorQuad* dst, const Etc1Block& block,
-                             const std::array<ColorQuad, 4>& subblockColors0,
-                             const std::array<ColorQuad, 4>& subblockColors1,
-                             uint32_t y, bool flipFlag, bool preserveAlpha) {
+static void writeSubblockRow(ColorQuad* dst, const Etc1Block& block, const std::array<ColorQuad, 4>& subblockColors0, const std::array<ColorQuad, 4>& subblockColors1, uint32_t y, bool flipFlag, bool preserveAlpha) {
     if (preserveAlpha) {
         if (flipFlag) {
             const std::array<ColorQuad, 4>& subblockColors = (y < 2) ? subblockColors0 : subblockColors1;
@@ -1271,20 +1280,20 @@ bool unpackEtc1Block(const void* etc1Block, uint32_t* dstPixelsRgba, bool preser
 }
 
 struct Etc1SolutionCoordinates {
-    inline Etc1SolutionCoordinates() : mUnscaledColor(0, 0, 0, 0),
-                                       mIntenTable(0),
-                                       mColor4(false) {
-    }
+    inline Etc1SolutionCoordinates() : 
+        mUnscaledColor(0, 0, 0, 0),
+        mIntenTable(0),
+        mColor4(false) {}
 
-    inline Etc1SolutionCoordinates(uint32_t r, uint32_t g, uint32_t b, uint32_t intenTable, bool color4) : mUnscaledColor(static_cast<int>(r), static_cast<int>(g), static_cast<int>(b), sColorChannelMax),
-                                                                                       mIntenTable(intenTable),
-                                                                                       mColor4(color4) {
-    }
+    inline Etc1SolutionCoordinates(uint32_t r, uint32_t g, uint32_t b, uint32_t intenTable, bool color4) :
+        mUnscaledColor(static_cast<int>(r), static_cast<int>(g), static_cast<int>(b), sColorChannelMax),
+        mIntenTable(intenTable),
+        mColor4(color4) {}
 
-    inline Etc1SolutionCoordinates(const ColorQuad& c, uint32_t intenTable, bool color4) : mUnscaledColor(c),
-                                                                                      mIntenTable(intenTable),
-                                                                                      mColor4(color4) {
-    }
+    inline Etc1SolutionCoordinates(const ColorQuad& c, uint32_t intenTable, bool color4) :
+        mUnscaledColor(c),
+        mIntenTable(intenTable),
+        mColor4(color4) {}
 
     inline Etc1SolutionCoordinates(const Etc1SolutionCoordinates& other) {
         *this = other;
@@ -1300,9 +1309,17 @@ struct Etc1SolutionCoordinates {
 
     inline ColorQuad getScaledColor() const {
         if (mColor4) {
-            return {static_cast<int>(scaleColor4To8(mUnscaledColor.r)), static_cast<int>(scaleColor4To8(mUnscaledColor.g)), static_cast<int>(scaleColor4To8(mUnscaledColor.b))};
+            return {
+                static_cast<int>(scaleColor4To8(mUnscaledColor.r)),
+                static_cast<int>(scaleColor4To8(mUnscaledColor.g)),
+                static_cast<int>(scaleColor4To8(mUnscaledColor.b))
+            };
         }
-        return {static_cast<int>(scaleColor5To8(mUnscaledColor.r)), static_cast<int>(scaleColor5To8(mUnscaledColor.g)), static_cast<int>(scaleColor5To8(mUnscaledColor.b))};
+        return {
+            static_cast<int>(scaleColor5To8(mUnscaledColor.r)),
+            static_cast<int>(scaleColor5To8(mUnscaledColor.g)),
+            static_cast<int>(scaleColor5To8(mUnscaledColor.b))
+        };
     }
 
     inline void getBlockColors(ColorQuad* blockColors) {
@@ -1329,7 +1346,7 @@ struct Etc1SolutionCoordinates {
 };
 
 class Etc1Optimizer {
-    public:
+public:
     Etc1Optimizer(const Etc1Optimizer&) = delete;
     Etc1Optimizer& operator=(const Etc1Optimizer&) = delete;
 
@@ -1399,10 +1416,10 @@ class Etc1Optimizer {
     void init(const Params& params, Results& result);
     bool compute();
 
-    private:
+private:
     struct PotentialSolution {
-        PotentialSolution() : mCoords() {
-        }
+        PotentialSolution() : 
+            mCoords() {}
 
         Etc1SolutionCoordinates mCoords;
         std::array<uint8_t, sSubblockPixels> mSelectors;
@@ -1513,8 +1530,19 @@ static void evaluateIntenTablesSsse3(const ColorQuad* srcPixels, const ColorQuad
     const __m128i px23 = _mm_loadu_si128(std::bit_cast<const __m128i*>(&srcPixels[4]));
 
     // Reorder bytes so each 2-pixel group becomes [r,g,b,0, r,g,b,0] (0x80 zeros the alpha byte).
-    const __m128i shuf01 = _mm_setr_epi8(0, 1, 2, static_cast<char>(0x80), 4, 5, 6, static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80));
-    const __m128i shuf23 = _mm_setr_epi8(8, 9, 10, static_cast<char>(0x80), 12, 13, 14, static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80));
+    const __m128i shuf01 = _mm_setr_epi8(
+        0, 1, 2, static_cast<char>(0x80),
+        4, 5, 6, static_cast<char>(0x80),
+        static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80),
+        static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80)
+    );
+
+    const __m128i shuf23 = _mm_setr_epi8(
+        8, 9, 10, static_cast<char>(0x80),
+        12, 13, 14, static_cast<char>(0x80),
+        static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80),
+        static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80), static_cast<char>(0x80)
+    );
 
     const __m128i zero = _mm_setzero_si128();
 
@@ -1525,8 +1553,16 @@ static void evaluateIntenTablesSsse3(const ColorQuad* srcPixels, const ColorQuad
     pxv[3] = _mm_unpacklo_epi8(_mm_shuffle_epi8(px23, shuf23), zero); // pixels 6,7
 
     // Int16 lane layout: [r0,g0,b0,a0, r1,g1,b1,a1] (alpha lanes forced to 0).
-    const __m128i base16 = _mm_set_epi16(0, baseColor.b, baseColor.g, baseColor.r, 0, baseColor.b, baseColor.g, baseColor.r);
-    const __m128i kMask = _mm_set_epi16(0, static_cast<short>(0xFFFF), static_cast<short>(0xFFFF), static_cast<short>(0xFFFF), 0, static_cast<short>(0xFFFF), static_cast<short>(0xFFFF), static_cast<short>(0xFFFF));
+    const __m128i base16 = _mm_set_epi16(
+        0, baseColor.b, baseColor.g, baseColor.r,
+        0, baseColor.b, baseColor.g, baseColor.r
+    );
+
+    const __m128i kMask = _mm_set_epi16(
+        0, static_cast<short>(0xFFFF), static_cast<short>(0xFFFF), static_cast<short>(0xFFFF),
+        0, static_cast<short>(0xFFFF), static_cast<short>(0xFFFF), static_cast<short>(0xFFFF)
+    );
+
     const __m128i k255 = _mm_set1_epi16(255);
 
     for (uint32_t t = 0; t < IntenModifierValues; t++) {
@@ -1590,7 +1626,13 @@ static void evaluateIntenTablesAvx2(const ColorQuad* srcPixels, const ColorQuad&
     const __m128i px01 = _mm_loadu_si128(std::bit_cast<const __m128i*>(&srcPixels[0]));
     const __m128i px23 = _mm_loadu_si128(std::bit_cast<const __m128i*>(&srcPixels[4]));
 
-    const __m128i shuf4 = _mm_setr_epi8(0, 1, 2, static_cast<char>(0x80), 4, 5, 6, static_cast<char>(0x80), 8, 9, 10, static_cast<char>(0x80), 12, 13, 14, static_cast<char>(0x80));
+    const __m128i shuf4 = _mm_setr_epi8(
+        0, 1, 2, static_cast<char>(0x80),
+        4, 5, 6, static_cast<char>(0x80),
+        8, 9, 10, static_cast<char>(0x80),
+        12, 13, 14, static_cast<char>(0x80)
+    );
+
     const __m256i zero = _mm256_setzero_si256();
 
     std::array<__m256i, 2> pxv;
@@ -1598,11 +1640,20 @@ static void evaluateIntenTablesAvx2(const ColorQuad* srcPixels, const ColorQuad&
     pxv[1] = _mm256_cvtepu8_epi16(_mm_shuffle_epi8(px23, shuf4)); // pixels 4..7
 
     // Int16 lane layout: [r0,g0,b0,a0, r1,g1,b1,a1, r2,g2,b2,a2, r3,g3,b3,a3] (alpha lanes forced to 0).
-    const __m256i base256 = _mm256_set_epi16(0, baseColor.b, baseColor.g, baseColor.r,
-                                             0, baseColor.b, baseColor.g, baseColor.r,
-                                             0, baseColor.b, baseColor.g, baseColor.r,
-                                             0, baseColor.b, baseColor.g, baseColor.r);
-    const __m256i kMask = _mm256_set_epi16(0, static_cast<short>(0xFFFF), static_cast<short>(0xFFFF), static_cast<short>(0xFFFF), 0, static_cast<short>(0xFFFF), static_cast<short>(0xFFFF), static_cast<short>(0xFFFF), 0, static_cast<short>(0xFFFF), static_cast<short>(0xFFFF), static_cast<short>(0xFFFF), 0, static_cast<short>(0xFFFF), static_cast<short>(0xFFFF), static_cast<short>(0xFFFF));
+    const __m256i base256 = _mm256_set_epi16(
+        0, baseColor.b, baseColor.g, baseColor.r,
+        0, baseColor.b, baseColor.g, baseColor.r,
+        0, baseColor.b, baseColor.g, baseColor.r,
+        0, baseColor.b, baseColor.g, baseColor.r
+    );
+
+    const __m256i kMask = _mm256_set_epi16(
+        0, static_cast<short>(0xFFFF), static_cast<short>(0xFFFF), static_cast<short>(0xFFFF),
+        0, static_cast<short>(0xFFFF), static_cast<short>(0xFFFF), static_cast<short>(0xFFFF),
+        0, static_cast<short>(0xFFFF), static_cast<short>(0xFFFF), static_cast<short>(0xFFFF),
+        0, static_cast<short>(0xFFFF), static_cast<short>(0xFFFF), static_cast<short>(0xFFFF)
+    );
+
     const __m256i k255 = _mm256_set1_epi16(255);
 
     for (uint32_t t = 0; t < IntenModifierValues; t++) {
@@ -1784,7 +1835,10 @@ void Etc1Optimizer::refineSolution(int xd, int yd, int zd, const Etc1SolutionCoo
         const auto bg1 = Etc1::clamp<int>(static_cast<int>(std::lroundf((mAvgColor[1] - avgDeltaGF) * limitF / static_cast<float>(sColorChannelMax))), 0, mLimit);
         const auto bb1 = Etc1::clamp<int>(static_cast<int>(std::lroundf((mAvgColor[2] - avgDeltaBF) * limitF / static_cast<float>(sColorChannelMax))), 0, mLimit);
 
-        const bool skip = ((coords.mUnscaledColor.r == br1) && (coords.mUnscaledColor.g == bg1) && (coords.mUnscaledColor.b == bb1)) || ((br1 == mBestSolution.mCoords.mUnscaledColor.r) && (bg1 == mBestSolution.mCoords.mUnscaledColor.g) && (bb1 == mBestSolution.mCoords.mUnscaledColor.b)) || ((mBr == br1) && (mBg == bg1) && (mBb == bb1));
+        const bool skip =
+            ((coords.mUnscaledColor.r == br1) && (coords.mUnscaledColor.g == bg1) && (coords.mUnscaledColor.b == bb1)) ||
+            ((br1 == mBestSolution.mCoords.mUnscaledColor.r) && (bg1 == mBestSolution.mCoords.mUnscaledColor.g) && (bb1 == mBestSolution.mCoords.mUnscaledColor.b)) ||
+            ((mBr == br1) && (mBg == bg1) && (mBb == bb1));
 
         if (skip) {
             break;
@@ -2347,9 +2401,7 @@ static void setRefinementScanDeltas(Etc1Optimizer::Params& params, uint32_t subb
 
 // Attempts the solid-color fast path for a subblock, writing into result (whose mError is reset to
 // the "no match" sentinel even when the subblock is not solid or quality is too low).
-static void trySolidSubblockColor(Etc1Optimizer::Results& result, const ColorQuad* subblockPixels,
-                                  Etc1PackParams& packParams, uint32_t useColor4,
-                                  const ColorQuad* baseColor5Unscaled) {
+static void trySolidSubblockColor(Etc1Optimizer::Results& result, const ColorQuad* subblockPixels, Etc1PackParams& packParams, uint32_t useColor4, const ColorQuad* baseColor5Unscaled) {
     result.mError = sUint64Max;
     const uint32_t subblockPixel0U32 = subblockPixels[0].mU32;
     int r;
