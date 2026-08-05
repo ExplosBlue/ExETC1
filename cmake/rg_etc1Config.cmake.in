@@ -1,5 +1,0 @@
-@PACKAGE_INIT@
-
-include("${CMAKE_CURRENT_LIST_DIR}/rg_etc1Targets.cmake")
-
-check_required_components(rg_etc1)

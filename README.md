@@ -1,4 +1,4 @@
-# rg-etc1
+# ex_etc1
 
 A fast, high-quality **ETC1 (Ericsson Texture Compression)** encoder and decoder.
 
@@ -23,15 +23,15 @@ This project is a modernized fork of [Rich Geldreich's rg_etc1](https://github.c
 ### As a subdirectory
 
 ```cmake
-add_subdirectory(third_party/rg-etc1)
-target_link_libraries(yourapp PRIVATE rg_etc1::rg_etc1)
+add_subdirectory(third_party/ex_etc1)
+target_link_libraries(yourapp PRIVATE ex_etc1::ex_etc1)
 ```
 
 ### Installed package
 
 ```cmake
-find_package(rg_etc1 CONFIG REQUIRED)
-target_link_libraries(yourapp PRIVATE rg_etc1::rg_etc1)
+find_package(ex_etc1 CONFIG REQUIRED)
+target_link_libraries(yourapp PRIVATE ex_etc1::ex_etc1)
 ```
 
 ### Standalone

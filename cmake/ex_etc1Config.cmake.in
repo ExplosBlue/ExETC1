@@ -1,0 +1,5 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/ex_etc1Targets.cmake")
+
+check_required_components(ex_etc1)
