@@ -2,14 +2,7 @@
 // Please see ZLIB license at the end of this file.
 #pragma once
 
-// Standalone type aliases, mirroring the PTCL-Tool typedefs.h that this header was
-// originally shared with, so the codec can be built outside of PTCL-Tool.
-using u8  = unsigned char;
-using u16 = unsigned short;
-using u32 = unsigned int;
-using u64 = unsigned long long;
-using s32 = int;
-
+#include <cstdint>
 
 namespace Etc1 {
 
@@ -19,7 +12,7 @@ namespace Etc1 {
 // Returns false if the block is invalid. Invalid blocks will still be unpacked with clamping.
 // This function is thread safe, and does not dynamically allocate any memory.
 // If preserveAlpha is true, the alpha channel of the destination pixels will not be overwritten. Otherwise, alpha will be set to 255.
-bool unpackEtc1Block(const void* etc1Block, u32* dstPixelsRgba, bool preserveAlpha = false);
+bool unpackEtc1Block(const void* etc1Block, uint32_t* dstPixelsRgba, bool preserveAlpha = false);
 
 // ========================================================================== //
 
@@ -45,7 +38,7 @@ struct Etc1PackParams {
 // Returns squared error of result.
 // This function is thread safe, and does not dynamically allocate any memory.
 // packEtc1Block() does not currently support "perceptual" colorspace metrics - it primarily optimizes for RGB RMSE.
-u32 packEtc1Block(void* etc1Block, const u32* srcPixelsRgba, Etc1PackParams& packParams);
+uint32_t packEtc1Block(void* etc1Block, const uint32_t* srcPixelsRgba, Etc1PackParams& packParams);
 
 // ========================================================================== //
 
