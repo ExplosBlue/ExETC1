@@ -475,15 +475,15 @@ static const std::array<uint8_t, SelectorValues> sSelectorIndexToEtc1 = {3, 2, 0
 // config tables are filled in a single pass and the inverse lookup is built from the monotonic
 // grid rows (see makeEtc1InverseLookup).
 // Decodes a packed ETC1 color to an 8-bit value; constexpr so it also drives the compile-time table generation.
-static constexpr uint32_t etc1DecodeValue(uint32_t diff, uint32_t inten, uint32_t selector, uint32_t packedC) {
-    assert((diff < 2) && (inten < 8) && (selector < 4) && (packedC < (diff ? 32 : 16)));
+static constexpr uint32_t etc1DecodeValue(uint32_t diff, uint32_t intensity, uint32_t selector, uint32_t packedC) {
+    assert((diff < 2) && (intensity < 8) && (selector < 4) && (packedC < (diff ? 32 : 16)));
     int c = 0;
     if (diff) {
         c = static_cast<int>(packedC >> 2) | static_cast<int>(packedC << 3);
     } else {
         c = static_cast<int>(packedC) | (static_cast<int>(packedC) << 4);
     }
-    c += sEtc1IntenTables[inten][selector];
+    c += sEtc1IntenTables[intensity][selector];
     c = Etc1::clamp<int>(c, 0, 255);
     return c;
 }
@@ -496,10 +496,10 @@ consteval EtcDecodeGrid makeEtc1DecodeGrid() {
     EtcDecodeGrid grid{};
     for (uint32_t diff = 0; diff < 2; diff++) {
         const uint32_t packedLimit = diff ? 32U : 16U;
-        for (uint32_t inten = 0; inten < IntenModifierValues; inten++) {
+        for (uint32_t intensity = 0; intensity < IntenModifierValues; intensity++) {
             for (uint32_t selector = 0; selector < SelectorValues; selector++) {
                 for (uint32_t packedColor = 0; packedColor < packedLimit; packedColor++) {
-                    grid[diff][inten][selector][packedColor] = static_cast<uint8_t>(etc1DecodeValue(diff, inten, selector, packedColor));
+                    grid[diff][intensity][selector][packedColor] = static_cast<uint8_t>(etc1DecodeValue(diff, intensity, selector, packedColor));
                 }
             }
         }
@@ -515,16 +515,16 @@ consteval void fillColor8ToEtcConfigRows(const EtcDecodeGrid& grid,
     std::array<uint32_t, 256> counts{};
     for (uint32_t diff = 0; diff < 2; diff++) {
         const uint32_t packedLimit = diff ? 32U : 16U;
-        for (uint32_t inten = 0; inten < IntenModifierValues; inten++) {
+        for (uint32_t intensity = 0; intensity < IntenModifierValues; intensity++) {
             std::array<std::array<bool, 256>, SelectorValues> emitted{};
             for (uint32_t packedColor = 0; packedColor < packedLimit; packedColor++) {
                 for (uint32_t selector = 0; selector < SelectorValues; selector++) {
-                    const uint32_t target = grid[diff][inten][selector][packedColor];
+                    const uint32_t target = grid[diff][intensity][selector][packedColor];
                     if (emitted[selector][target]) {
                         continue;
                     }
                     emitted[selector][target] = true;
-                    const auto entry = static_cast<uint16_t>(diff | (inten << 1) | (selector << 4) | (packedColor << 8));
+                    const auto entry = static_cast<uint16_t>(diff | (intensity << 1) | (selector << 4) | (packedColor << 8));
                     if (target == 0) {
                         table0To255[0][counts[0]++] = entry;
                     } else if (target == sColorChannelMax) {
@@ -567,15 +567,15 @@ consteval std::array<std::array<uint16_t, 256>, static_cast<std::size_t>(2) * In
     std::array<std::array<uint16_t, 256>, static_cast<std::size_t>(2) * IntenModifierValues * SelectorValues> table{};
     for (uint32_t diff = 0; diff < 2; diff++) {
         const uint32_t limit = diff ? 32 : 16;
-        for (uint32_t inten = 0; inten < IntenModifierValues; inten++) {
+        for (uint32_t intensity = 0; intensity < IntenModifierValues; intensity++) {
             for (uint32_t selector = 0; selector < SelectorValues; selector++) {
-                const uint32_t inverseTableIndex = diff + (inten << 1) + (selector << 4);
+                const uint32_t inverseTableIndex = diff + (intensity << 1) + (selector << 4);
                 auto& row = table[inverseTableIndex];
                 uint32_t rangeStart = 0;
                 uint32_t prevPackedC = 0;
-                uint32_t prevValue = grid[diff][inten][selector][0];
+                uint32_t prevValue = grid[diff][intensity][selector][0];
                 for (uint32_t packedC = 1; packedC < limit; packedC++) {
-                    const uint32_t value = grid[diff][inten][selector][packedC];
+                    const uint32_t value = grid[diff][intensity][selector][packedC];
                     if (value == prevValue) {
                         continue;
                     }
@@ -1986,7 +1986,7 @@ bool Etc1Optimizer::evaluateSolutionFast(const Etc1SolutionCoordinates& coords, 
             blockInten[s] = blockColor.r + blockColor.g + blockColor.b;
         }
 
-        // evaluateSolutionFast() enforces/assumesd a total ordering of the input colors along the intensity (1,1,1) axis to more quickly classify the inputs to selectors.
+        // evaluateSolutionFast() enforces/assumes a total ordering of the input colors along the intensity (1,1,1) axis to more quickly classify the inputs to selectors.
         // The inputs colors have been presorted along the projection onto this axis, and ETC1 block colors are always ordered along the intensity axis, so this classification is fast.
         // 0   1   2   3
         //   01  12  23
@@ -2101,7 +2101,7 @@ static constexpr uint32_t inverseError(uint16_t comp) {
 }
 
 // Packs solid color blocks efficiently using a set of small precomputed tables.
-// For random 888 inputs, MSE results are better than Erricson's ETC1 packer in "slow" mode ~9.5% of the time, is slightly worse only ~.01% of the time, and is equal the rest of the time.
+// For random 888 inputs, MSE results are better than Ericsson's ETC1 packer in "slow" mode ~9.5% of the time, is slightly worse only ~.01% of the time, and is equal the rest of the time.
 static uint64_t packEtc1BlockSolidColor(Etc1Block& block, const uint8_t* color, [[maybe_unused]] Etc1PackParams& packParams) {
     assert(sEtc1InverseLookup[0][sColorChannelMax]);
 
