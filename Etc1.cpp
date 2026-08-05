@@ -29,10 +29,10 @@
 #endif
 
 #if defined(_DEBUG) || defined(DEBUG)
-#define RG_ETC1_BUILD_DEBUG
+constexpr bool sBuildDebug = true;
+#else
+constexpr bool sBuildDebug = false;
 #endif
-
-#define RG_ETC1_ASSERT assert
 
 namespace Etc1 {
 // NOLINTBEGIN(cert-dcl03-c) // clang-tidy 22.1.8 fires on runtime asserts (argc>0, loop guards) and its static_assert autofix would not compile; every assert() here is a runtime invariant.
@@ -164,8 +164,8 @@ struct ColorQuad {
     }
 
     inline ColorQuad& setNoClampYAlpha(Parameter y, Parameter alpha = ComponentTraits::Max) {
-        RG_ETC1_ASSERT((y >= ComponentTraits::Min) && (y <= ComponentTraits::Max));
-        RG_ETC1_ASSERT((alpha >= ComponentTraits::Min) && (alpha <= ComponentTraits::Max));
+        assert((y >= ComponentTraits::Min) && (y <= ComponentTraits::Max));
+        assert((alpha >= ComponentTraits::Min) && (alpha <= ComponentTraits::Max));
 
         r = static_cast<Component>(y);
         g = static_cast<Component>(y);
@@ -183,10 +183,10 @@ struct ColorQuad {
     }
 
     inline ColorQuad& setNoClampRgba(Parameter red, Parameter green, Parameter blue, Parameter alpha) {
-        RG_ETC1_ASSERT((red >= ComponentTraits::Min) && (red <= ComponentTraits::Max));
-        RG_ETC1_ASSERT((green >= ComponentTraits::Min) && (green <= ComponentTraits::Max));
-        RG_ETC1_ASSERT((blue >= ComponentTraits::Min) && (blue <= ComponentTraits::Max));
-        RG_ETC1_ASSERT((alpha >= ComponentTraits::Min) && (alpha <= ComponentTraits::Max));
+        assert((red >= ComponentTraits::Min) && (red <= ComponentTraits::Max));
+        assert((green >= ComponentTraits::Min) && (green <= ComponentTraits::Max));
+        assert((blue >= ComponentTraits::Min) && (blue <= ComponentTraits::Max));
+        assert((alpha >= ComponentTraits::Min) && (alpha <= ComponentTraits::Max));
 
         r = static_cast<Component>(red);
         g = static_cast<Component>(green);
@@ -196,9 +196,9 @@ struct ColorQuad {
     }
 
     inline ColorQuad& setNoClampRgb(Parameter red, Parameter green, Parameter blue) {
-        RG_ETC1_ASSERT((red >= ComponentTraits::Min) && (red <= ComponentTraits::Max));
-        RG_ETC1_ASSERT((green >= ComponentTraits::Min) && (green <= ComponentTraits::Max));
-        RG_ETC1_ASSERT((blue >= ComponentTraits::Min) && (blue <= ComponentTraits::Max));
+        assert((red >= ComponentTraits::Min) && (red <= ComponentTraits::Max));
+        assert((green >= ComponentTraits::Min) && (green <= ComponentTraits::Max));
+        assert((blue >= ComponentTraits::Min) && (blue <= ComponentTraits::Max));
 
         r = static_cast<Component>(red);
         g = static_cast<Component>(green);
@@ -211,16 +211,16 @@ struct ColorQuad {
     static inline bool getCompsAreSigned() { return ComponentTraits::Signed; }
 
     inline Component operator[](u32 i) const {
-        RG_ETC1_ASSERT(i < NumComps);
+        assert(i < NumComps);
         return c[i];
     }
     inline Component& operator[](u32 i) {
-        RG_ETC1_ASSERT(i < NumComps);
+        assert(i < NumComps);
         return c[i];
     }
 
     inline ColorQuad& setComponent(u32 i, Parameter f) {
-        RG_ETC1_ASSERT(i < NumComps);
+        assert(i < NumComps);
 
         c[i] = static_cast<Component>(clamp(f));
 
@@ -318,7 +318,7 @@ struct Vec3F {
     }
 
     inline float operator[](u32 i) const {
-        RG_ETC1_ASSERT(i < 3);
+        assert(i < 3);
         return mS[i];
     }
 
@@ -694,19 +694,19 @@ struct Etc1Block {
     }
 
     inline u32 getByteBits(u32 ofs, u32 num) const {
-        RG_ETC1_ASSERT((ofs + num) <= 64U);
-        RG_ETC1_ASSERT(num && (num <= 8U));
-        RG_ETC1_ASSERT((ofs >> 3) == ((ofs + num - 1) >> 3));
+        assert((ofs + num) <= 64U);
+        assert(num && (num <= 8U));
+        assert((ofs >> 3) == ((ofs + num - 1) >> 3));
         const u32 byteOfs = 7 - (ofs >> 3);
         const u32 byteBitOfs = ofs & 7;
         return (mBytes[byteOfs] >> byteBitOfs) & ((1 << num) - 1);
     }
 
     inline void setByteBits(u32 ofs, u32 num, u32 bits) {
-        RG_ETC1_ASSERT((ofs + num) <= 64U);
-        RG_ETC1_ASSERT(num && (num < 32U));
-        RG_ETC1_ASSERT((ofs >> 3) == ((ofs + num - 1) >> 3));
-        RG_ETC1_ASSERT(bits < (1U << num));
+        assert((ofs + num) <= 64U);
+        assert(num && (num < 32U));
+        assert((ofs >> 3) == ((ofs + num - 1) >> 3));
+        assert(bits < (1U << num));
         const u32 byteOfs = 7 - (ofs >> 3);
         const u32 byteBitOfs = ofs & 7;
         const u32 mask = (1 << num) - 1;
@@ -737,15 +737,15 @@ struct Etc1Block {
     // Returns intensity modifier table (0-7) used by subblock subblockId.
     // subblockId=0 left/top (CW 1), 1=right/bottom (CW 2)
     inline u32 getIntenTable(u32 subblockId) const {
-        RG_ETC1_ASSERT(subblockId < 2);
+        assert(subblockId < 2);
         const u32 ofs = subblockId ? 2 : 5;
         return (mBytes[3] >> ofs) & 7;
     }
 
     // Sets intensity modifier table (0-7) used by subblock subblockId (0 or 1)
     inline void setIntenTable(u32 subblockId, u32 t) {
-        RG_ETC1_ASSERT(subblockId < 2);
-        RG_ETC1_ASSERT(t < 8);
+        assert(subblockId < 2);
+        assert(t < 8);
         const u32 ofs = subblockId ? 2 : 5;
         mBytes[3] &= ~(7 << ofs);
         mBytes[3] |= (t << ofs);
@@ -753,7 +753,7 @@ struct Etc1Block {
 
     // Returned selector value ranges from 0-3 and is a direct index into sEtc1IntenTables.
     inline u32 getSelector(u32 x, u32 y) const {
-        RG_ETC1_ASSERT((x | y) < 4);
+        assert((x | y) < 4);
 
         const u32 bitIndex = x * 4 + y;
         const u32 byteBitOfs = bitIndex & 7;
@@ -767,7 +767,7 @@ struct Etc1Block {
 
     // Selector "val" ranges from 0-3 and is a direct index into sEtc1IntenTables.
     inline void setSelector(u32 x, u32 y, u32 val) {
-        RG_ETC1_ASSERT((x | y | val) < 4);
+        assert((x | y | val) < 4);
         const u32 bitIndex = x * 4 + y;
 
         u8* p = &mBytes[7 - (bitIndex >> 3)];
@@ -885,8 +885,8 @@ struct Etc1Block {
 // Returns pointer to sorted array.
 template <typename T, typename Q>
 T* indirectRadixSort(u32 numIndices, T* indices0, T* indices1, const Q* keys, u32 keyOfs, u32 keySize, bool initIndices) {
-    RG_ETC1_ASSERT((keyOfs >= 0) && (keyOfs < sizeof(T)));
-    RG_ETC1_ASSERT((keySize >= 1) && (keySize <= 4));
+    assert((keyOfs >= 0) && (keyOfs < sizeof(T)));
+    assert((keySize >= 1) && (keySize <= 4));
 
     if (initIndices) {
         T* p = indices0;
@@ -906,14 +906,19 @@ T* indirectRadixSort(u32 numIndices, T* indices0, T* indices1, const Q* keys, u3
 
     std::memset(hist.data(), 0, sizeof(hist[0]) * 256 * keySize);
 
-#define RG_ETC1_GET_KEY(p) (*(const u32*)((const u8*)(keys + *(p)) + keyOfs))
-#define RG_ETC1_GET_KEY_FROM_INDEX(i) (*(const u32*)((const u8*)(keys + (i)) + keyOfs))
+    // Loads the keySize bytes starting at byte offset keyOfs of the key indexed by `index`.
+    // The unaligned u32 load is expressed with memcpy to stay strictly well-defined.
+    const auto keyFromIndex = [keys, keyOfs](u32 index) -> u32 {
+        u32 value = 0;
+        std::memcpy(&value, static_cast<const void*>(static_cast<const u8*>(static_cast<const void*>(keys + index)) + keyOfs), sizeof(value));
+        return value;
+    };
 
     if (keySize == 4) {
         T* p = indices0;
         T* q = indices0 + numIndices;
         for (; p != q; p++) {
-            const u32 key = RG_ETC1_GET_KEY(p);
+            const u32 key = keyFromIndex(*p);
 
             hist[key & 0xFF]++;
             hist[256 + ((key >> 8) & 0xFF)]++;
@@ -924,7 +929,7 @@ T* indirectRadixSort(u32 numIndices, T* indices0, T* indices1, const Q* keys, u3
         T* p = indices0;
         T* q = indices0 + numIndices;
         for (; p != q; p++) {
-            const u32 key = RG_ETC1_GET_KEY(p);
+            const u32 key = keyFromIndex(*p);
 
             hist[key & 0xFF]++;
             hist[256 + ((key >> 8) & 0xFF)]++;
@@ -935,8 +940,8 @@ T* indirectRadixSort(u32 numIndices, T* indices0, T* indices1, const Q* keys, u3
         T* q = indices0 + (numIndices >> 1) * 2;
 
         for (; p != q; p += 2) {
-            const u32 key0 = RG_ETC1_GET_KEY(p);
-            const u32 key1 = RG_ETC1_GET_KEY(p + 1);
+            const u32 key0 = keyFromIndex(*p);
+            const u32 key1 = keyFromIndex(*(p + 1));
 
             hist[key0 & 0xFF]++;
             hist[256 + ((key0 >> 8) & 0xFF)]++;
@@ -946,13 +951,13 @@ T* indirectRadixSort(u32 numIndices, T* indices0, T* indices1, const Q* keys, u3
         }
 
         if (numIndices & 1) {
-            const u32 key = RG_ETC1_GET_KEY(p);
+            const u32 key = keyFromIndex(*p);
 
             hist[key & 0xFF]++;
             hist[256 + ((key >> 8) & 0xFF)]++;
         }
     } else {
-        RG_ETC1_ASSERT(keySize == 1);
+        assert(keySize == 1);
         if (keySize != 1) {
             return nullptr;
         }
@@ -961,15 +966,15 @@ T* indirectRadixSort(u32 numIndices, T* indices0, T* indices1, const Q* keys, u3
         T* q = indices0 + (numIndices >> 1) * 2;
 
         for (; p != q; p += 2) {
-            const u32 key0 = RG_ETC1_GET_KEY(p);
-            const u32 key1 = RG_ETC1_GET_KEY(p + 1);
+            const u32 key0 = keyFromIndex(*p);
+            const u32 key1 = keyFromIndex(*(p + 1));
 
             hist[key0 & 0xFF]++;
             hist[key1 & 0xFF]++;
         }
 
         if (numIndices & 1) {
-            const u32 key = RG_ETC1_GET_KEY(p);
+            const u32 key = keyFromIndex(*p);
 
             hist[key & 0xFF]++;
         }
@@ -1001,8 +1006,8 @@ T* indirectRadixSort(u32 numIndices, T* indices0, T* indices1, const Q* keys, u3
             u32 index0 = p[0];
             u32 index1 = p[1];
 
-            u32 c0 = (RG_ETC1_GET_KEY_FROM_INDEX(index0) >> passShift) & 0xFF;
-            u32 c1 = (RG_ETC1_GET_KEY_FROM_INDEX(index1) >> passShift) & 0xFF;
+            u32 c0 = (keyFromIndex(index0) >> passShift) & 0xFF;
+            u32 c1 = (keyFromIndex(index1) >> passShift) & 0xFF;
 
             if (c0 == c1) {
                 u32 dstOffset0 = offsets[c0];
@@ -1022,7 +1027,7 @@ T* indirectRadixSort(u32 numIndices, T* indices0, T* indices1, const Q* keys, u3
 
         if (numIndices & 1) {
             u32 index = *p;
-            u32 c = (RG_ETC1_GET_KEY_FROM_INDEX(index) >> passShift) & 0xFF;
+            u32 c = (keyFromIndex(index) >> passShift) & 0xFF;
 
             u32 dstOffset = offsets[c];
             offsets[c] = dstOffset + 1;
@@ -1037,8 +1042,6 @@ T* indirectRadixSort(u32 numIndices, T* indices0, T* indices1, const Q* keys, u3
 
     return cur;
 }
-#undef RG_ETC1_GET_KEY
-#undef RG_ETC1_GET_KEY_FROM_INDEX
 
 u16 Etc1Block::packColor5(const ColorQuad& color, bool scaled, u32 bias) {
     return packColor5(color.r, color.g, color.b, scaled, bias);
@@ -1115,9 +1118,9 @@ bool Etc1Block::unpackColor5(u32& r, u32& g, u32& b, u16 packedColor5, u16 packe
 }
 
 u16 Etc1Block::packDelta3(int r, int g, int b) {
-    RG_ETC1_ASSERT((r >= ColorDeltaMin) && (r <= ColorDeltaMax));
-    RG_ETC1_ASSERT((g >= ColorDeltaMin) && (g <= ColorDeltaMax));
-    RG_ETC1_ASSERT((b >= ColorDeltaMin) && (b <= ColorDeltaMax));
+    assert((r >= ColorDeltaMin) && (r <= ColorDeltaMax));
+    assert((g >= ColorDeltaMin) && (g <= ColorDeltaMax));
+    assert((b >= ColorDeltaMin) && (b <= ColorDeltaMax));
     if (r < 0) {
         r += 8;
     }
@@ -1185,7 +1188,7 @@ void Etc1Block::unpackColor4(u32& r, u32& g, u32& b, u16 packedColor4, bool scal
 }
 
 void Etc1Block::getDiffSubblockColors(ColorQuad* dst, u16 packedColor5, u32 tableIdx) {
-    RG_ETC1_ASSERT(tableIdx < IntenModifierValues);
+    assert(tableIdx < IntenModifierValues);
     const int* intenModifierTable = &sEtc1IntenTables[tableIdx][0];
 
     u32 r, g, b;
@@ -1207,7 +1210,7 @@ void Etc1Block::getDiffSubblockColors(ColorQuad* dst, u16 packedColor5, u32 tabl
 }
 
 bool Etc1Block::getDiffSubblockColors(ColorQuad* dst, u16 packedColor5, u16 packedDelta3, u32 tableIdx) {
-    RG_ETC1_ASSERT(tableIdx < IntenModifierValues);
+    assert(tableIdx < IntenModifierValues);
     const int* intenModifierTable = &sEtc1IntenTables[tableIdx][0];
 
     u32 r, g, b;
@@ -1231,7 +1234,7 @@ bool Etc1Block::getDiffSubblockColors(ColorQuad* dst, u16 packedColor5, u16 pack
 }
 
 void Etc1Block::getAbsSubblockColors(ColorQuad* dst, u16 packedColor4, u32 tableIdx) {
-    RG_ETC1_ASSERT(tableIdx < IntenModifierValues);
+    assert(tableIdx < IntenModifierValues);
     const int* intenModifierTable = &sEtc1IntenTables[tableIdx][0];
 
     u32 r, g, b;
@@ -1472,7 +1475,7 @@ class Etc1Optimizer {
                 mBlockColor4 = rhs.mBlockColor4;
                 mBlockIntenTable = rhs.mBlockIntenTable;
                 mError = rhs.mError;
-                RG_ETC1_ASSERT(mN == rhs.mN);
+                assert(mN == rhs.mN);
                 std::memcpy(mSelectors, rhs.mSelectors, rhs.mN);
             }
             return *this;
@@ -1575,17 +1578,17 @@ static void evaluateIntenTablesScalar(const ColorQuad* srcPixels, const ColorQua
 
 #if defined(__x86_64__) || defined(__amd64__) || defined(_M_X64) || defined(_M_AMD64)
 
-#if defined(__GNUC__) || defined(__clang__)
-#define RG_ETC1_SIMD_TARGET(feats) __attribute__((target(feats)))
+#ifdef RG_ETC1_FORCE_SCALAR
+constexpr bool sForceScalar = true;
 #else
-#define RG_ETC1_SIMD_TARGET(feats)
+constexpr bool sForceScalar = false;
 #endif
 
 // Processes 2 pixels per 128-bit register. Each int16 lane group is [r,g,b,0] so that
 // _mm_madd_epi16(d,d) produces per-pixel partial sums which the 0xB1 shuffle merges into
 // per-pixel squared errors [e0,e0,e1,e1]. All errors are non-negative, so the signed
 // int32 comparison used for argmin is equivalent to an unsigned one.
-RG_ETC1_SIMD_TARGET("ssse3")
+[[gnu::target("ssse3")]]
 static void evaluateIntenTablesSsse3(const ColorQuad* srcPixels, const ColorQuad& baseColor, u64* errors, u8* selectors) {
     // 8 pixels of RGBA == 32 bytes == two unaligned 128-bit loads.
     const __m128i px01 = _mm_loadu_si128(std::bit_cast<const __m128i*>(&srcPixels[0]));
@@ -1666,7 +1669,7 @@ static void evaluateIntenTablesSsse3(const ColorQuad* srcPixels, const ColorQuad
 // Same algorithm, but 4 pixels per 256-bit register. Uses _mm_min_epi32 for the error side of the
 // argmin (all errors are non-negative so signed min is exact) which is cheaper than the 3-op select.
 #if defined(__GNUC__) || defined(__clang__)
-RG_ETC1_SIMD_TARGET("avx2")
+[[gnu::target("avx2")]]
 static void evaluateIntenTablesAvx2(const ColorQuad* srcPixels, const ColorQuad& baseColor, u64* errors, u8* selectors) {
     const __m128i px01 = _mm_loadu_si128(std::bit_cast<const __m128i*>(&srcPixels[0]));
     const __m128i px23 = _mm_loadu_si128(std::bit_cast<const __m128i*>(&srcPixels[4]));
@@ -1746,9 +1749,9 @@ static void evaluateIntenTablesAvx2(const ColorQuad* srcPixels, const ColorQuad&
 
 static EvaluateIntenTablesFunc getEvaluateIntenTablesFunc() {
     static const EvaluateIntenTablesFunc sFunc = []() -> EvaluateIntenTablesFunc {
-#ifdef RG_ETC1_FORCE_SCALAR
-        return &evaluateIntenTablesScalar;
-#else
+        if (sForceScalar) {
+            return &evaluateIntenTablesScalar;
+        }
 #if defined(__GNUC__) || defined(__clang__)
         __builtin_cpu_init();
         if (__builtin_cpu_supports("avx2")) {
@@ -1763,12 +1766,9 @@ static EvaluateIntenTablesFunc getEvaluateIntenTablesFunc() {
         return &evaluateIntenTablesSsse3;
 #endif
         return &evaluateIntenTablesScalar;
-#endif
     }();
     return sFunc;
 }
-
-#undef RG_ETC1_SIMD_TARGET
 
 #endif // x86-64
 
@@ -1892,7 +1892,7 @@ bool Etc1Optimizer::compute() {
 
     const u8* selectors = mBestSolution.mSelectors.data();
 
-#ifdef RG_ETC1_BUILD_DEBUG
+    if (sBuildDebug) {
         std::array<ColorQuad, 4> blockColors;
         mBestSolution.mCoords.getBlockColors(blockColors.data());
 
@@ -1902,8 +1902,8 @@ bool Etc1Optimizer::compute() {
             actualError += srcPixels[i].squaredDistanceRgb(blockColors[selectors[i]]);
         }
 
-        RG_ETC1_ASSERT(actualError == mBestSolution.mError);
-#endif
+        assert(actualError == mBestSolution.mError);
+    }
 
     mResult->mError = mBestSolution.mError;
 
@@ -1919,7 +1919,7 @@ bool Etc1Optimizer::compute() {
 
 void Etc1Optimizer::init(const Params& p, Results& r) {
     // This version is hardcoded for 8 pixel subblocks.
-    RG_ETC1_ASSERT(p.mNumSrcPixels == 8);
+    assert(p.mNumSrcPixels == 8);
 
     mParams = &p;
     mResult = &r;
@@ -1987,13 +1987,13 @@ bool Etc1Optimizer::evaluateSolution(const Etc1SolutionCoordinates& coords, Pote
     std::array<u8, static_cast<std::size_t>(IntenModifierValues) * 8> tableSelectors;
     evalIntenTables(mParams->mSrcPixels, baseColor, tableErrors.data(), tableSelectors.data());
 
-#ifdef RG_ETC1_BUILD_DEBUG
+    if (sBuildDebug) {
         std::array<u64, IntenModifierValues> scalarErrors;
         std::array<u8, static_cast<std::size_t>(IntenModifierValues) * 8> scalarSelectors;
         evaluateIntenTablesScalar(mParams->mSrcPixels, baseColor, scalarErrors.data(), scalarSelectors.data());
-        RG_ETC1_ASSERT(memcmp(scalarErrors.data(), tableErrors.data(), sizeof(tableErrors)) == 0);
-        RG_ETC1_ASSERT(memcmp(scalarSelectors.data(), tableSelectors.data(), sizeof(tableSelectors)) == 0);
-#endif
+        assert(memcmp(scalarErrors.data(), tableErrors.data(), sizeof(tableErrors)) == 0);
+        assert(memcmp(scalarSelectors.data(), tableSelectors.data(), sizeof(tableSelectors)) == 0);
+    }
 
     for (u32 intenTable = 0; intenTable < IntenModifierValues; intenTable++) {
         const u64 totalError = tableErrors[intenTable];
@@ -2130,7 +2130,7 @@ bool Etc1Optimizer::evaluateSolutionFast(const Etc1SolutionCoordinates& coords, 
 }
 
 static u32 etc1DecodeValue(u32 diff, u32 inten, u32 selector, u32 packedC) {
-    RG_ETC1_ASSERT((diff < 2) && (inten < 8) && (selector < 4) && (packedC < (diff ? 32 : 16)));
+    assert((diff < 2) && (inten < 8) && (selector < 4) && (packedC < (diff ? 32 : 16)));
     int c;
     if (diff) {
         c = static_cast<int>(packedC >> 2) | static_cast<int>(packedC << 3);
@@ -2167,7 +2167,7 @@ void initEtc1Tables() {
                             }
                         }
                     }
-                    RG_ETC1_ASSERT(bestError <= 255);
+                    assert(bestError <= 255);
                     sEtc1InverseLookup[inverseTableIndex][color] = static_cast<u16>(bestPackedC | (bestError << 8));
                 }
             }
@@ -2190,7 +2190,7 @@ void initEtc1Tables() {
 // Packs solid color blocks efficiently using a set of small precomputed tables.
 // For random 888 inputs, MSE results are better than Erricson's ETC1 packer in "slow" mode ~9.5% of the time, is slightly worse only ~.01% of the time, and is equal the rest of the time.
 static u64 packEtc1BlockSolidColor(Etc1Block& block, const u8* color, [[maybe_unused]] Etc1PackParams& packParams) {
-    RG_ETC1_ASSERT(sEtc1InverseLookup[0][255]);
+    assert(sEtc1InverseLookup[0][255]);
 
     static const std::array<u32, 4> sNextComp = {1, 2, 0, 1};
 
@@ -2217,11 +2217,11 @@ static u64 packEtc1BlockSolidColor(Etc1Block& block, const u8* color, [[maybe_un
             for (;;) {
                 const u32 x = *table++;
 
-#ifdef RG_ETC1_BUILD_DEBUG
+                if (sBuildDebug) {
                     // (x >> 4) & 3 is the selector, (x >> 8) & 255 the base component; the packed
                     // table entry must decode back to cPlusDelta.
-                    RG_ETC1_ASSERT(etc1DecodeValue(x & 1, (x >> 1) & 7, (x >> 4) & 3, (x >> 8) & 255) == static_cast<u32>(cPlusDelta));
-#endif
+                    assert(etc1DecodeValue(x & 1, (x >> 1) & 7, (x >> 4) & 3, (x >> 8) & 255) == static_cast<u32>(cPlusDelta));
+                }
 
                 const u16* inverseTable = sEtc1InverseLookup[x & 0xFF].data();
                 u16 comp1 = inverseTable[c1];
@@ -2276,7 +2276,7 @@ static u32 packEtc1BlockSolidColorConstrained(
     [[maybe_unused]] Etc1PackParams& packParams,
     bool useDiff,
     const ColorQuad* baseColor5Unscaled) {
-    RG_ETC1_ASSERT(sEtc1InverseLookup[0][255]);
+    assert(sEtc1InverseLookup[0][255]);
 
     static const std::array<u32, 4> sNextComp = {1, 2, 0, 1};
 
@@ -2321,11 +2321,11 @@ static u32 packEtc1BlockSolidColorConstrained(
                     }
                 }
 
-#ifdef RG_ETC1_BUILD_DEBUG
+                if (sBuildDebug) {
                     // (x >> 4) & 3 is the selector, (x >> 8) & 255 the base component; the packed
                     // table entry must decode back to cPlusDelta.
-                    RG_ETC1_ASSERT(etc1DecodeValue(diff, (x >> 1) & 7, (x >> 4) & 3, (x >> 8) & 255) == static_cast<u32>(cPlusDelta));
-#endif
+                    assert(etc1DecodeValue(diff, (x >> 1) & 7, (x >> 4) & 3, (x >> 8) & 255) == static_cast<u32>(cPlusDelta));
+                }
 
                 const u16* inverseTable = sEtc1InverseLookup[x & 0xFF].data();
                 u16 comp1 = inverseTable[c1];
@@ -2430,12 +2430,12 @@ u32 packEtc1Block(void* etc1Block, const u32* srcPixelsRgba, Etc1PackParams& pac
     const auto* srcPixels = std::bit_cast<const ColorQuad*>(srcPixelsRgba);
     Etc1Block& dstBlock = *static_cast<Etc1Block*>(etc1Block);
 
-#ifdef RG_ETC1_BUILD_DEBUG
+    if (sBuildDebug) {
         // Ensure all alpha values are 0xFF.
         for (u32 i = 0; i < 16; i++) {
-            RG_ETC1_ASSERT(srcPixels[i].a == 255);
+            assert(srcPixels[i].a == 255);
         }
-#endif
+    }
 
     // Check for solid block.
     const u32 firstPixelU32 = srcPixels->mU32;
@@ -2595,7 +2595,7 @@ u32 packEtc1Block(void* etc1Block, const u32* srcPixelsRgba, Etc1PackParams& pac
     int dr = bestResults[1].mBlockColorUnscaled.r - bestResults[0].mBlockColorUnscaled.r;
     int dg = bestResults[1].mBlockColorUnscaled.g - bestResults[0].mBlockColorUnscaled.g;
     int db = bestResults[1].mBlockColorUnscaled.b - bestResults[0].mBlockColorUnscaled.b;
-    RG_ETC1_ASSERT(bestUseColor4 || ((Etc1::minimum(dr, dg, db) >= ColorDeltaMin) && (Etc1::maximum(dr, dg, db) <= ColorDeltaMax)));
+    assert(bestUseColor4 || ((Etc1::minimum(dr, dg, db) >= ColorDeltaMin) && (Etc1::maximum(dr, dg, db) <= ColorDeltaMax)));
 
     if (bestUseColor4) {
         dstBlock.mBytes[0] = static_cast<u8>(bestResults[1].mBlockColorUnscaled.r | (bestResults[0].mBlockColorUnscaled.r << 4));
