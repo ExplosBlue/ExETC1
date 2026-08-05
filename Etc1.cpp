@@ -1197,6 +1197,42 @@ void Etc1Block::getAbsSubblockColors(ColorQuad* dst, uint16_t packedColor4, uint
     dst[3].set(ir + y3, ig + y3, ib + y3);
 }
 
+// Writes one 4-pixel row of a decoded block. When flipped, the top two rows come from subblock 0
+// and the bottom two from subblock 1; otherwise the left two pixels come from subblock 0 and the
+// right two from subblock 1. preserveAlpha selects setRgb (keep dst alpha) vs. full assignment.
+static void writeSubblockRow(ColorQuad* dst, const Etc1Block& block,
+                             const std::array<ColorQuad, 4>& subblockColors0,
+                             const std::array<ColorQuad, 4>& subblockColors1,
+                             uint32_t y, bool flipFlag, bool preserveAlpha) {
+    if (preserveAlpha) {
+        if (flipFlag) {
+            const std::array<ColorQuad, 4>& subblockColors = (y < 2) ? subblockColors0 : subblockColors1;
+            dst[0].setRgb(subblockColors[block.getSelector(0, y)]);
+            dst[1].setRgb(subblockColors[block.getSelector(1, y)]);
+            dst[2].setRgb(subblockColors[block.getSelector(2, y)]);
+            dst[3].setRgb(subblockColors[block.getSelector(3, y)]);
+        } else {
+            dst[0].setRgb(subblockColors0[block.getSelector(0, y)]);
+            dst[1].setRgb(subblockColors0[block.getSelector(1, y)]);
+            dst[2].setRgb(subblockColors1[block.getSelector(2, y)]);
+            dst[3].setRgb(subblockColors1[block.getSelector(3, y)]);
+        }
+    } else {
+        if (flipFlag) {
+            const std::array<ColorQuad, 4>& subblockColors = (y < 2) ? subblockColors0 : subblockColors1;
+            dst[0] = subblockColors[block.getSelector(0, y)];
+            dst[1] = subblockColors[block.getSelector(1, y)];
+            dst[2] = subblockColors[block.getSelector(2, y)];
+            dst[3] = subblockColors[block.getSelector(3, y)];
+        } else {
+            dst[0] = subblockColors0[block.getSelector(0, y)];
+            dst[1] = subblockColors0[block.getSelector(1, y)];
+            dst[2] = subblockColors1[block.getSelector(2, y)];
+            dst[3] = subblockColors1[block.getSelector(3, y)];
+        }
+    }
+}
+
 bool unpackEtc1Block(const void* etc1Block, uint32_t* dstPixelsRgba, bool preserveAlpha) {
     auto* dst = std::bit_cast<ColorQuad*>(dstPixelsRgba);
     const Etc1Block& block = *static_cast<const Etc1Block*>(etc1Block);
@@ -1226,66 +1262,9 @@ bool unpackEtc1Block(const void* etc1Block, uint32_t* dstPixelsRgba, bool preser
         Etc1Block::getAbsSubblockColors(subblockColors1.data(), baseColor4Subblock1, tableIndex1);
     }
 
-    if (preserveAlpha) {
-        if (flipFlag) {
-            for (uint32_t y = 0; y < 2; y++) {
-                dst[0].setRgb(subblockColors0[block.getSelector(0, y)]);
-                dst[1].setRgb(subblockColors0[block.getSelector(1, y)]);
-                dst[2].setRgb(subblockColors0[block.getSelector(2, y)]);
-                dst[3].setRgb(subblockColors0[block.getSelector(3, y)]);
-                dst += 4;
-            }
-
-            for (uint32_t y = 2; y < sBlockHeight; y++) {
-                dst[0].setRgb(subblockColors1[block.getSelector(0, y)]);
-                dst[1].setRgb(subblockColors1[block.getSelector(1, y)]);
-                dst[2].setRgb(subblockColors1[block.getSelector(2, y)]);
-                dst[3].setRgb(subblockColors1[block.getSelector(3, y)]);
-                dst += 4;
-            }
-        } else {
-            for (uint32_t y = 0; y < sBlockHeight; y++) {
-                dst[0].setRgb(subblockColors0[block.getSelector(0, y)]);
-                dst[1].setRgb(subblockColors0[block.getSelector(1, y)]);
-                dst[2].setRgb(subblockColors1[block.getSelector(2, y)]);
-                dst[3].setRgb(subblockColors1[block.getSelector(3, y)]);
-                dst += 4;
-            }
-        }
-    } else {
-        if (flipFlag) {
-            // 0000
-            // 0000
-            // 1111
-            // 1111
-            for (uint32_t y = 0; y < 2; y++) {
-                dst[0] = subblockColors0[block.getSelector(0, y)];
-                dst[1] = subblockColors0[block.getSelector(1, y)];
-                dst[2] = subblockColors0[block.getSelector(2, y)];
-                dst[3] = subblockColors0[block.getSelector(3, y)];
-                dst += 4;
-            }
-
-            for (uint32_t y = 2; y < sBlockHeight; y++) {
-                dst[0] = subblockColors1[block.getSelector(0, y)];
-                dst[1] = subblockColors1[block.getSelector(1, y)];
-                dst[2] = subblockColors1[block.getSelector(2, y)];
-                dst[3] = subblockColors1[block.getSelector(3, y)];
-                dst += 4;
-            }
-        } else {
-            // 0011
-            // 0011
-            // 0011
-            // 0011
-            for (uint32_t y = 0; y < sBlockHeight; y++) {
-                dst[0] = subblockColors0[block.getSelector(0, y)];
-                dst[1] = subblockColors0[block.getSelector(1, y)];
-                dst[2] = subblockColors1[block.getSelector(2, y)];
-                dst[3] = subblockColors1[block.getSelector(3, y)];
-                dst += 4;
-            }
-        }
+    for (uint32_t y = 0; y < sBlockHeight; y++) {
+        writeSubblockRow(dst, block, subblockColors0, subblockColors1, y, flipFlag, preserveAlpha);
+        dst += sBlockWidth;
     }
 
     return success;
@@ -1453,8 +1432,13 @@ class Etc1Optimizer {
     PotentialSolution mTrialSolution;
     std::array<uint8_t, sSubblockPixels> mTempSelectors;
 
+    bool passesBaseColor5Constraint(const Etc1SolutionCoordinates& coords) const;
+    bool commitTrialSolution(const Etc1SolutionCoordinates& coords, PotentialSolution& trialSolution, PotentialSolution* bestSolution);
     bool evaluateSolution(const Etc1SolutionCoordinates& coords, PotentialSolution& trialSolution, PotentialSolution* bestSolution);
     bool evaluateSolutionFast(const Etc1SolutionCoordinates& coords, PotentialSolution& trialSolution, PotentialSolution* bestSolution);
+    void refineSolution(int xd, int yd, int zd, const Etc1SolutionCoordinates& coords);
+    bool commitBestSolution();
+    void sortLumaForFastMode();
 };
 
 // Evaluates all 8 intensity tables (4 candidate block colors each) against the 8 source pixels
@@ -1703,7 +1687,6 @@ static EvaluateIntenTablesFunc getEvaluateIntenTablesFunc() {
 #endif // x86-64
 
 bool Etc1Optimizer::compute() {
-    const uint32_t n = mParams->mNumSrcPixels;
     const int scanDeltaSize = static_cast<int>(mParams->mScanDeltaSize);
 
     // Scan through a subset of the 3D lattice centered around the avg block color trying each 3D (555 or 444) lattice point as a potential block color.
@@ -1749,77 +1732,85 @@ bool Etc1Optimizer::compute() {
                     }
                 }
 
-                // Now we have the input block, the avg. color of the input pixels, a set of trial selector indices, and the block color+intensity index.
-                // Now, for each component, attempt to refine the current solution by solving a simple linear equation. For example, for 4 colors:
-                // The goal is:
-                // pixel0 - (blockColor+intenTable[selector0]) + pixel1 - (blockColor+intenTable[selector1]) + pixel2 - (blockColor+intenTable[selector2]) + pixel3 - (blockColor+intenTable[selector3]) = 0
-                // Rearranging this:
-                // (pixel0 + pixel1 + pixel2 + pixel3) - (blockColor+intenTable[selector0]) - (blockColor+intenTable[selector1]) - (blockColor+intenTable[selector2]) - (blockColor+intenTable[selector3]) = 0
-                // (pixel0 + pixel1 + pixel2 + pixel3) - blockColor - intenTable[selector0] - blockColor-intenTable[selector1] - blockColor-intenTable[selector2] - blockColor-intenTable[selector3] = 0
-                // (pixel0 + pixel1 + pixel2 + pixel3) - 4*blockColor - intenTable[selector0] - intenTable[selector1] - intenTable[selector2] - intenTable[selector3] = 0
-                // (pixel0 + pixel1 + pixel2 + pixel3) - 4*blockColor - (intenTable[selector0] + intenTable[selector1] + intenTable[selector2] + intenTable[selector3]) = 0
-                // (pixel0 + pixel1 + pixel2 + pixel3)/4 - blockColor - (intenTable[selector0] + intenTable[selector1] + intenTable[selector2] + intenTable[selector3])/4 = 0
-                // blockColor = (pixel0 + pixel1 + pixel2 + pixel3)/4 - (intenTable[selector0] + intenTable[selector1] + intenTable[selector2] + intenTable[selector3])/4
-                // So what this means:
-                // optimal_block_color = avg_input - avg_inten_delta
-                // So the optimal block color can be computed by taking the average block color and subtracting the current average of the intensity delta.
-                // Unfortunately, optimal_block_color must then be quantized to 555 or 444 so it's not always possible to improve matters using this formula.
-                // Also, the above formula is for unclamped intensity deltas. The actual implementation takes into account clamping.
-
-                const uint32_t maxRefinementTrials = (mParams->mQuality == Etc1Quality::Low) ? 2 : (((xd | yd | zd) == 0) ? 4 : 2);
-                for (uint32_t refinementTrial = 0; refinementTrial < maxRefinementTrials; refinementTrial++) {
-                    const uint8_t* selectors = mBestSolution.mSelectors.data();
-                    const int* intenTableData = sEtc1IntenTables[mBestSolution.mCoords.mIntenTable].data();
-
-                    int deltaSumR = 0, deltaSumG = 0, deltaSumB = 0;
-                    const ColorQuad baseColor(mBestSolution.mCoords.getScaledColor());
-                    for (uint32_t r = 0; r < n; r++) {
-                        const uint32_t s = *selectors++;
-                        const int yd = intenTableData[s];
-                        // Compute actual delta being applied to each pixel, taking into account clamping.
-                        deltaSumR += Etc1::clamp<int>(baseColor.r + yd, 0, sColorChannelMax) - baseColor.r;
-                        deltaSumG += Etc1::clamp<int>(baseColor.g + yd, 0, sColorChannelMax) - baseColor.g;
-                        deltaSumB += Etc1::clamp<int>(baseColor.b + yd, 0, sColorChannelMax) - baseColor.b;
-                    }
-                    if ((!deltaSumR) && (!deltaSumG) && (!deltaSumB)) {
-                        break;
-                    }
-                    const float avgDeltaRF = static_cast<float>(deltaSumR) / static_cast<float>(n);
-                    const float avgDeltaGF = static_cast<float>(deltaSumG) / static_cast<float>(n);
-                    const float avgDeltaBF = static_cast<float>(deltaSumB) / static_cast<float>(n);
-                    const auto limitF = static_cast<float>(mLimit);
-                    const auto br1 = Etc1::clamp<int>(static_cast<int>(std::lroundf((mAvgColor[0] - avgDeltaRF) * limitF / static_cast<float>(sColorChannelMax))), 0, mLimit);
-                    const auto bg1 = Etc1::clamp<int>(static_cast<int>(std::lroundf((mAvgColor[1] - avgDeltaGF) * limitF / static_cast<float>(sColorChannelMax))), 0, mLimit);
-                    const auto bb1 = Etc1::clamp<int>(static_cast<int>(std::lroundf((mAvgColor[2] - avgDeltaBF) * limitF / static_cast<float>(sColorChannelMax))), 0, mLimit);
-
-                    const bool skip = ((mbr == br1) && (mbg == bg1) && (mbb == bb1)) || ((br1 == mBestSolution.mCoords.mUnscaledColor.r) && (bg1 == mBestSolution.mCoords.mUnscaledColor.g) && (bb1 == mBestSolution.mCoords.mUnscaledColor.b)) || ((mBr == br1) && (mBg == bg1) && (mBb == bb1));
-
-                    if (skip) {
-                        break;
-                    }
-
-                    Etc1SolutionCoordinates coords1(br1, bg1, bb1, 0, mParams->mUseColor4);
-                    if (mParams->mQuality == Etc1Quality::High) {
-                        if (!evaluateSolution(coords1, mTrialSolution, &mBestSolution)) {
-                            break;
-                        }
-                    } else {
-                        if (!evaluateSolutionFast(coords1, mTrialSolution, &mBestSolution)) {
-                            break;
-                        }
-                    }
-
-                } // refinementTrial
+                refineSolution(xd, yd, zd, coords);
 
             } // xdi
         } // ydi
     } // zdi
 
+    return commitBestSolution();
+}
+
+// Refines the current best solution's block color per component by solving a simple linear equation. For example, for 4 colors:
+// The goal is:
+// pixel0 - (blockColor+intenTable[selector0]) + pixel1 - (blockColor+intenTable[selector1]) + pixel2 - (blockColor+intenTable[selector2]) + pixel3 - (blockColor+intenTable[selector3]) = 0
+// Rearranging this:
+// (pixel0 + pixel1 + pixel2 + pixel3) - (blockColor+intenTable[selector0]) - (blockColor+intenTable[selector1]) - (blockColor+intenTable[selector2]) - (blockColor+intenTable[selector3]) = 0
+// (pixel0 + pixel1 + pixel2 + pixel3) - blockColor - intenTable[selector0] - blockColor-intenTable[selector1] - blockColor-intenTable[selector2] - blockColor-intenTable[selector3] = 0
+// (pixel0 + pixel1 + pixel2 + pixel3) - 4*blockColor - intenTable[selector0] - intenTable[selector1] - intenTable[selector2] - intenTable[selector3] = 0
+// (pixel0 + pixel1 + pixel2 + pixel3) - 4*blockColor - (intenTable[selector0] + intenTable[selector1] + intenTable[selector2] + intenTable[selector3]) = 0
+// (pixel0 + pixel1 + pixel2 + pixel3)/4 - blockColor - (intenTable[selector0] + intenTable[selector1] + intenTable[selector2] + intenTable[selector3])/4 = 0
+// blockColor = (pixel0 + pixel1 + pixel2 + pixel3)/4 - (intenTable[selector0] + intenTable[selector1] + intenTable[selector2] + intenTable[selector3])/4
+// So what this means:
+// optimal_block_color = avg_input - avg_inten_delta
+// So the optimal block color can be computed by taking the average block color and subtracting the current average of the intensity delta.
+// Unfortunately, optimal_block_color must then be quantized to 555 or 444 so it's not always possible to improve matters using this formula.
+// Also, the above formula is for unclamped intensity deltas. The actual implementation takes into account clamping.
+void Etc1Optimizer::refineSolution(int xd, int yd, int zd, const Etc1SolutionCoordinates& coords) {
+    const uint32_t n = mParams->mNumSrcPixels;
+    const uint32_t maxRefinementTrials = (mParams->mQuality == Etc1Quality::Low) ? 2 : (((xd | yd | zd) == 0) ? 4 : 2);
+    for (uint32_t refinementTrial = 0; refinementTrial < maxRefinementTrials; refinementTrial++) {
+        const uint8_t* selectors = mBestSolution.mSelectors.data();
+        const int* intenTableData = sEtc1IntenTables[mBestSolution.mCoords.mIntenTable].data();
+
+        int deltaSumR = 0, deltaSumG = 0, deltaSumB = 0;
+        const ColorQuad baseColor(mBestSolution.mCoords.getScaledColor());
+        for (uint32_t r = 0; r < n; r++) {
+            const uint32_t s = *selectors++;
+            const int yd = intenTableData[s];
+            // Compute actual delta being applied to each pixel, taking into account clamping.
+            deltaSumR += Etc1::clamp<int>(baseColor.r + yd, 0, sColorChannelMax) - baseColor.r;
+            deltaSumG += Etc1::clamp<int>(baseColor.g + yd, 0, sColorChannelMax) - baseColor.g;
+            deltaSumB += Etc1::clamp<int>(baseColor.b + yd, 0, sColorChannelMax) - baseColor.b;
+        }
+        if ((!deltaSumR) && (!deltaSumG) && (!deltaSumB)) {
+            break;
+        }
+        const float avgDeltaRF = static_cast<float>(deltaSumR) / static_cast<float>(n);
+        const float avgDeltaGF = static_cast<float>(deltaSumG) / static_cast<float>(n);
+        const float avgDeltaBF = static_cast<float>(deltaSumB) / static_cast<float>(n);
+        const auto limitF = static_cast<float>(mLimit);
+        const auto br1 = Etc1::clamp<int>(static_cast<int>(std::lroundf((mAvgColor[0] - avgDeltaRF) * limitF / static_cast<float>(sColorChannelMax))), 0, mLimit);
+        const auto bg1 = Etc1::clamp<int>(static_cast<int>(std::lroundf((mAvgColor[1] - avgDeltaGF) * limitF / static_cast<float>(sColorChannelMax))), 0, mLimit);
+        const auto bb1 = Etc1::clamp<int>(static_cast<int>(std::lroundf((mAvgColor[2] - avgDeltaBF) * limitF / static_cast<float>(sColorChannelMax))), 0, mLimit);
+
+        const bool skip = ((coords.mUnscaledColor.r == br1) && (coords.mUnscaledColor.g == bg1) && (coords.mUnscaledColor.b == bb1)) || ((br1 == mBestSolution.mCoords.mUnscaledColor.r) && (bg1 == mBestSolution.mCoords.mUnscaledColor.g) && (bb1 == mBestSolution.mCoords.mUnscaledColor.b)) || ((mBr == br1) && (mBg == bg1) && (mBb == bb1));
+
+        if (skip) {
+            break;
+        }
+
+        Etc1SolutionCoordinates coords1(br1, bg1, bb1, 0, mParams->mUseColor4);
+        if (mParams->mQuality == Etc1Quality::High) {
+            if (!evaluateSolution(coords1, mTrialSolution, &mBestSolution)) {
+                break;
+            }
+        } else {
+            if (!evaluateSolutionFast(coords1, mTrialSolution, &mBestSolution)) {
+                break;
+            }
+        }
+
+    } // refinementTrial
+}
+
+bool Etc1Optimizer::commitBestSolution() {
     if (!mBestSolution.mValid) {
         mResult->mError = sUint32Max;
         return false;
     }
 
+    const uint32_t n = mParams->mNumSrcPixels;
     const uint8_t* selectors = mBestSolution.mSelectors.data();
 
     if (sBuildDebug) {
@@ -1878,15 +1869,7 @@ void Etc1Optimizer::init(const Params& p, Results& r) {
     mBb = Etc1::clamp<int>(static_cast<int>(std::lroundf(mAvgColor[2] * limitF / static_cast<float>(sColorChannelMax))), 0, mLimit);
 
     if (mParams->mQuality <= Etc1Quality::Medium) {
-        mSortedLumaIndices = indirectRadixSort(n, mSortedLuma[0].data(), mSortedLuma[1].data(), mLuma.data(), 0, sizeof(mLuma[0]), false);
-        mSortedLumaBuf = mSortedLuma[0].data();
-        if (mSortedLumaIndices == mSortedLuma[0].data()) {
-            mSortedLumaBuf = mSortedLuma[1].data();
-        }
-
-        for (uint32_t i = 0; i < n; i++) {
-            mSortedLumaBuf[i] = mLuma[mSortedLumaIndices[i]];
-        }
+        sortLumaForFastMode();
     }
 
     mBestSolution.mCoords.clear();
@@ -1894,17 +1877,25 @@ void Etc1Optimizer::init(const Params& p, Results& r) {
     mBestSolution.mError = sUint64Max;
 }
 
+// Presorts the pixel luma values so evaluateSolutionFast() can classify inputs to selectors with a
+// single monotonic walk along the intensity (1,1,1) axis (see evaluateSolutionFast for details).
+void Etc1Optimizer::sortLumaForFastMode() {
+    const uint32_t n = sSubblockPixels;
+    mSortedLumaIndices = indirectRadixSort(n, mSortedLuma[0].data(), mSortedLuma[1].data(), mLuma.data(), 0, sizeof(mLuma[0]), false);
+    mSortedLumaBuf = mSortedLuma[0].data();
+    if (mSortedLumaIndices == mSortedLuma[0].data()) {
+        mSortedLumaBuf = mSortedLuma[1].data();
+    }
+
+    for (uint32_t i = 0; i < n; i++) {
+        mSortedLumaBuf[i] = mLuma[mSortedLumaIndices[i]];
+    }
+}
+
 bool Etc1Optimizer::evaluateSolution(const Etc1SolutionCoordinates& coords, PotentialSolution& trialSolution, PotentialSolution* bestSolution) {
     trialSolution.mValid = false;
-
-    if (mParams->mConstrainAgainstBaseColor5) {
-        const int dr = coords.mUnscaledColor.r - mParams->mBaseColor5.r;
-        const int dg = coords.mUnscaledColor.g - mParams->mBaseColor5.g;
-        const int db = coords.mUnscaledColor.b - mParams->mBaseColor5.b;
-
-        if ((Etc1::minimum(dr, dg, db) < ColorDeltaMin) || (Etc1::maximum(dr, dg, db) > ColorDeltaMax)) {
-            return false;
-        }
+    if (!passesBaseColor5Constraint(coords)) {
+        return false;
     }
 
     const ColorQuad baseColor(coords.getScaledColor());
@@ -1938,27 +1929,13 @@ bool Etc1Optimizer::evaluateSolution(const Etc1SolutionCoordinates& coords, Pote
     trialSolution.mCoords.mUnscaledColor = coords.mUnscaledColor;
     trialSolution.mCoords.mColor4 = mParams->mUseColor4;
 
-    bool success = false;
-    if (bestSolution) {
-        if (trialSolution.mError < bestSolution->mError) {
-            *bestSolution = trialSolution;
-            success = true;
-        }
-    }
-
-    return success;
+    return commitTrialSolution(coords, trialSolution, bestSolution);
 }
 
 bool Etc1Optimizer::evaluateSolutionFast(const Etc1SolutionCoordinates& coords, PotentialSolution& trialSolution, PotentialSolution* bestSolution) {
-    if (mParams->mConstrainAgainstBaseColor5) {
-        const int dr = coords.mUnscaledColor.r - mParams->mBaseColor5.r;
-        const int dg = coords.mUnscaledColor.g - mParams->mBaseColor5.g;
-        const int db = coords.mUnscaledColor.b - mParams->mBaseColor5.b;
-
-        if ((Etc1::minimum(dr, dg, db) < ColorDeltaMin) || (Etc1::maximum(dr, dg, db) > ColorDeltaMax)) {
-            trialSolution.mValid = false;
-            return false;
-        }
+    trialSolution.mValid = false;
+    if (!passesBaseColor5Constraint(coords)) {
+        return false;
     }
 
     const ColorQuad baseColor(coords.getScaledColor());
@@ -2048,6 +2025,29 @@ bool Etc1Optimizer::evaluateSolutionFast(const Etc1SolutionCoordinates& coords, 
     trialSolution.mCoords.mUnscaledColor = coords.mUnscaledColor;
     trialSolution.mCoords.mColor4 = mParams->mUseColor4;
 
+    return commitTrialSolution(coords, trialSolution, bestSolution);
+}
+
+// Returns false when the candidate block color is not allowed to deviate from the reference
+// base-color-5 by more than the diff-mode delta range.
+bool Etc1Optimizer::passesBaseColor5Constraint(const Etc1SolutionCoordinates& coords) const {
+    if (!mParams->mConstrainAgainstBaseColor5) {
+        return true;
+    }
+
+    const int dr = coords.mUnscaledColor.r - mParams->mBaseColor5.r;
+    const int dg = coords.mUnscaledColor.g - mParams->mBaseColor5.g;
+    const int db = coords.mUnscaledColor.b - mParams->mBaseColor5.b;
+
+    return (Etc1::minimum(dr, dg, db) >= ColorDeltaMin) && (Etc1::maximum(dr, dg, db) <= ColorDeltaMax);
+}
+
+// Stores the evaluated trial solution into the caller-provided best solution slot when it improves
+// on it, returning whether the caller should keep searching from this result.
+bool Etc1Optimizer::commitTrialSolution(const Etc1SolutionCoordinates& coords, PotentialSolution& trialSolution, PotentialSolution* bestSolution) {
+    trialSolution.mCoords.mUnscaledColor = coords.mUnscaledColor;
+    trialSolution.mCoords.mColor4 = mParams->mUseColor4;
+
     bool success = false;
     if (bestSolution) {
         if (trialSolution.mError < bestSolution->mError) {
@@ -2093,90 +2093,21 @@ static constexpr uint32_t inverseError(uint16_t comp) {
     return comp >> sBitsPerByte;
 }
 
-// Packs solid color blocks efficiently using a set of small precomputed tables.
-// For random 888 inputs, MSE results are better than Ericsson's ETC1 packer in "slow" mode ~9.5% of the time, is slightly worse only ~.01% of the time, and is equal the rest of the time.
-static uint64_t packEtc1BlockSolidColor(Etc1Block& block, const uint8_t* color, [[maybe_unused]] Etc1PackParams& packParams) {
-    assert(sEtc1InverseLookup[0][sColorChannelMax]);
+// Best config found by the solid-color search below.
+struct SolidColorSearchResult {
+    uint32_t bestError = sUint32Max;
+    uint32_t bestI = 0;
+    int bestX = 0;
+    int bestPackedC1 = 0;
+    int bestPackedC2 = 0;
+};
 
-    uint32_t bestError = sUint32Max, bestI = 0;
-    int bestX = 0, bestPackedC1 = 0, bestPackedC2 = 0;
-
-    // For each possible 8-bit value, there is a precomputed list of diff/inten/selector configurations that allow that 8-bit value to be encoded with no error.
-    for (uint32_t i = 0; i < 3; i++) {
-        const uint32_t c1 = color[sNextComp[i]], c2 = color[sNextComp[i + 1]];
-
-        const int deltaRange = 1;
-        for (int delta = -deltaRange; delta <= deltaRange; delta++) {
-            const int cPlusDelta = Etc1::clamp<int>(color[i] + delta, 0, sColorChannelMax);
-
-            const uint16_t* table = lookupEtcConfigTable(cPlusDelta);
-
-            for (;;) {
-                const uint32_t x = *table++;
-
-                if (sBuildDebug) {
-                    // (x >> 4) & 3 is the selector, (x >> 8) & 255 the base component; the packed
-                    // table entry must decode back to cPlusDelta.
-                    assert(etc1DecodeValue(x & 1, (x >> 1) & sIntenMask, (x >> 4) & sSelectorMask, etcConfigBase(x)) == static_cast<uint32_t>(cPlusDelta));
-                }
-
-                const uint16_t* inverseTable = sEtc1InverseLookup[etcConfigIndex(x)].data();
-                uint16_t comp1 = inverseTable[c1];
-                uint16_t comp2 = inverseTable[c2];
-                const uint32_t trialError = Etc1::square(cPlusDelta - color[i]) + Etc1::square(inverseError(comp1)) + Etc1::square(inverseError(comp2));
-                if (trialError < bestError) {
-                    bestError = trialError;
-                    bestX = static_cast<int>(x);
-                    bestPackedC1 = static_cast<int>(inverseValue(comp1));
-                    bestPackedC2 = static_cast<int>(inverseValue(comp2));
-                    bestI = i;
-                    if (!bestError) {
-                        goto foundPerfectMatch;
-                    }
-                }
-                if (*table == sEtc1TableTerminator) {
-                    break;
-                }
-            }
-        }
-    }
-foundPerfectMatch:
-
-    const uint32_t diff = bestX & 1;
-    const uint32_t inten = (bestX >> 1) & sIntenMask;
-
-    block.mBytes[3] = static_cast<uint8_t>(((inten | (inten << 3)) << 2) | (diff << 1));
-
-    const uint32_t etc1Selector = sSelectorIndexToEtc1[(bestX >> 4) & sSelectorMask];
-    const auto selectorWords0 = static_cast<uint16_t>((etc1Selector & 2) ? 0xFFFF : 0);
-    const auto selectorWords1 = static_cast<uint16_t>((etc1Selector & 1) ? 0xFFFF : 0);
-    std::memcpy(&block.mBytes[4], &selectorWords0, sizeof(selectorWords0));
-    std::memcpy(&block.mBytes[6], &selectorWords1, sizeof(selectorWords1));
-
-    const uint32_t bestPackedC0 = etcConfigBase(static_cast<uint32_t>(bestX));
-    if (diff) {
-        block.mBytes[bestI] = static_cast<uint8_t>(bestPackedC0 << 3);
-        block.mBytes[sNextComp[bestI]] = static_cast<uint8_t>(bestPackedC1 << 3);
-        block.mBytes[sNextComp[bestI + 1]] = static_cast<uint8_t>(bestPackedC2 << 3);
-    } else {
-        block.mBytes[bestI] = static_cast<uint8_t>(bestPackedC0 | (bestPackedC0 << 4));
-        block.mBytes[sNextComp[bestI]] = static_cast<uint8_t>(bestPackedC1 | (bestPackedC1 << 4));
-        block.mBytes[sNextComp[bestI + 1]] = static_cast<uint8_t>(bestPackedC2 | (bestPackedC2 << 4));
-    }
-
-    return bestError;
-}
-
-static uint32_t packEtc1BlockSolidColorConstrained(
-    Etc1Optimizer::Results& results,
-    uint32_t numColors, const uint8_t* color,
-    [[maybe_unused]] Etc1PackParams& packParams,
-    bool useDiff,
-    const ColorQuad* baseColor5Unscaled) {
-    assert(sEtc1InverseLookup[0][sColorChannelMax]);
-
-    uint32_t bestError = sUint32Max, bestI = 0;
-    int bestX = 0, bestPackedC1 = 0, bestPackedC2 = 0;
+// Walks the per-channel config tables (and their inverse decode tables) to find the lowest-error
+// diff/inten/selector combination for a solid color. requiredDiff >= 0 restricts the search to a
+// single diff mode (0 = individual, 1 = differential); when baseColor5Unscaled is non-null, diff
+// mode candidates are further constrained to stay within the base-color-5 delta range.
+static SolidColorSearchResult searchSolidColorConfigs(const uint8_t* color, int requiredDiff, const ColorQuad* baseColor5Unscaled) {
+    SolidColorSearchResult result;
 
     // For each possible 8-bit value, there is a precomputed list of diff/inten/selector configurations that allow that 8-bit value to be encoded with no error.
     for (uint32_t i = 0; i < 3; i++) {
@@ -2191,7 +2122,7 @@ static uint32_t packEtc1BlockSolidColorConstrained(
             for (;;) {
                 const uint32_t x = *table++;
                 const uint32_t diff = x & 1;
-                if (static_cast<uint32_t>(useDiff) != diff) {
+                if ((requiredDiff >= 0) && (static_cast<int>(diff) != requiredDiff)) {
                     if (*table == sEtc1TableTerminator) {
                         break;
                     }
@@ -2200,8 +2131,8 @@ static uint32_t packEtc1BlockSolidColorConstrained(
 
                 if ((diff) && (baseColor5Unscaled)) {
                     const int comp0 = static_cast<int>(etcConfigBase(x));
-                    int delta = comp0 - static_cast<int>(baseColor5Unscaled->c[i]);
-                    if ((delta < ColorDeltaMin) || (delta > ColorDeltaMax)) {
+                    const int delta0 = comp0 - static_cast<int>(baseColor5Unscaled->c[i]);
+                    if ((delta0 < ColorDeltaMin) || (delta0 > ColorDeltaMax)) {
                         if (*table == sEtc1TableTerminator) {
                             break;
                         }
@@ -2216,12 +2147,12 @@ static uint32_t packEtc1BlockSolidColorConstrained(
                 }
 
                 const uint16_t* inverseTable = sEtc1InverseLookup[etcConfigIndex(x)].data();
-                uint16_t comp1 = inverseTable[c1];
-                uint16_t comp2 = inverseTable[c2];
+                const uint16_t comp1 = inverseTable[c1];
+                const uint16_t comp2 = inverseTable[c2];
 
                 if ((diff) && (baseColor5Unscaled)) {
-                    int delta1 = static_cast<int>(inverseValue(comp1)) - static_cast<int>(baseColor5Unscaled->c[sNextComp[i]]);
-                    int delta2 = static_cast<int>(inverseValue(comp2)) - static_cast<int>(baseColor5Unscaled->c[sNextComp[i + 1]]);
+                    const int delta1 = static_cast<int>(inverseValue(comp1)) - static_cast<int>(baseColor5Unscaled->c[sNextComp[i]]);
+                    const int delta2 = static_cast<int>(inverseValue(comp2)) - static_cast<int>(baseColor5Unscaled->c[sNextComp[i + 1]]);
                     if ((delta1 < ColorDeltaMin) || (delta1 > ColorDeltaMax) || (delta2 < ColorDeltaMin) || (delta2 > ColorDeltaMax)) {
                         if (*table == sEtc1TableTerminator) {
                             break;
@@ -2231,13 +2162,13 @@ static uint32_t packEtc1BlockSolidColorConstrained(
                 }
 
                 const uint32_t trialError = Etc1::square(cPlusDelta - color[i]) + Etc1::square(inverseError(comp1)) + Etc1::square(inverseError(comp2));
-                if (trialError < bestError) {
-                    bestError = trialError;
-                    bestX = static_cast<int>(x);
-                    bestPackedC1 = static_cast<int>(inverseValue(comp1));
-                    bestPackedC2 = static_cast<int>(inverseValue(comp2));
-                    bestI = i;
-                    if (!bestError) {
+                if (trialError < result.bestError) {
+                    result.bestError = trialError;
+                    result.bestX = static_cast<int>(x);
+                    result.bestPackedC1 = static_cast<int>(inverseValue(comp1));
+                    result.bestPackedC2 = static_cast<int>(inverseValue(comp2));
+                    result.bestI = i;
+                    if (!result.bestError) {
                         goto foundPerfectMatch;
                     }
                 }
@@ -2249,21 +2180,66 @@ static uint32_t packEtc1BlockSolidColorConstrained(
     }
 foundPerfectMatch:
 
-    if (bestError == sUint32Max) {
-        return bestError;
+    return result;
+}
+
+// Packs solid color blocks efficiently using a set of small precomputed tables.
+// For random 888 inputs, MSE results are better than Ericsson's ETC1 packer in "slow" mode ~9.5% of the time, is slightly worse only ~.01% of the time, and is equal the rest of the time.
+static uint64_t packEtc1BlockSolidColor(Etc1Block& block, const uint8_t* color, [[maybe_unused]] Etc1PackParams& packParams) {
+    assert(sEtc1InverseLookup[0][sColorChannelMax]);
+
+    const SolidColorSearchResult search = searchSolidColorConfigs(color, -1, nullptr);
+
+    const uint32_t diff = static_cast<uint32_t>(search.bestX) & 1;
+    const uint32_t inten = (static_cast<uint32_t>(search.bestX) >> 1) & sIntenMask;
+
+    block.mBytes[3] = static_cast<uint8_t>(((inten | (inten << 3)) << 2) | (diff << 1));
+
+    const uint32_t etc1Selector = sSelectorIndexToEtc1[(static_cast<uint32_t>(search.bestX) >> 4) & sSelectorMask];
+    const auto selectorWords0 = static_cast<uint16_t>((etc1Selector & 2) ? 0xFFFF : 0);
+    const auto selectorWords1 = static_cast<uint16_t>((etc1Selector & 1) ? 0xFFFF : 0);
+    std::memcpy(&block.mBytes[4], &selectorWords0, sizeof(selectorWords0));
+    std::memcpy(&block.mBytes[6], &selectorWords1, sizeof(selectorWords1));
+
+    const uint32_t bestPackedC0 = etcConfigBase(static_cast<uint32_t>(search.bestX));
+    if (diff) {
+        block.mBytes[search.bestI] = static_cast<uint8_t>(bestPackedC0 << 3);
+        block.mBytes[sNextComp[search.bestI]] = static_cast<uint8_t>(search.bestPackedC1 << 3);
+        block.mBytes[sNextComp[search.bestI + 1]] = static_cast<uint8_t>(search.bestPackedC2 << 3);
+    } else {
+        block.mBytes[search.bestI] = static_cast<uint8_t>(bestPackedC0 | (bestPackedC0 << 4));
+        block.mBytes[sNextComp[search.bestI]] = static_cast<uint8_t>(search.bestPackedC1 | (search.bestPackedC1 << 4));
+        block.mBytes[sNextComp[search.bestI + 1]] = static_cast<uint8_t>(search.bestPackedC2 | (search.bestPackedC2 << 4));
     }
 
-    bestError *= numColors;
+    return search.bestError;
+}
+
+static uint32_t packEtc1BlockSolidColorConstrained(
+    Etc1Optimizer::Results& results,
+    uint32_t numColors, const uint8_t* color,
+    [[maybe_unused]] Etc1PackParams& packParams,
+    bool useDiff,
+    const ColorQuad* baseColor5Unscaled) {
+    assert(sEtc1InverseLookup[0][sColorChannelMax]);
+
+    const SolidColorSearchResult search = searchSolidColorConfigs(color, useDiff ? 1 : 0, baseColor5Unscaled);
+
+    if (search.bestError == sUint32Max) {
+        return search.bestError;
+    }
+
+    const uint32_t bestError = search.bestError * numColors;
 
     results.mN = numColors;
-    results.mBlockColor4 = !(bestX & 1);
-    results.mBlockIntenTable = (bestX >> 1) & sIntenMask;
-    std::memset(results.mSelectors, static_cast<int>((bestX >> 4) & sSelectorMask), numColors);
+    results.mBlockColor4 = !(search.bestX & 1);
+    results.mBlockIntenTable = (static_cast<uint32_t>(search.bestX) >> 1) & sIntenMask;
+    std::memset(results.mSelectors, static_cast<int>((static_cast<uint32_t>(search.bestX) >> 4) & sSelectorMask), numColors);
 
-    const uint32_t bestPackedC0 = etcConfigBase(static_cast<uint32_t>(bestX));
-    results.mBlockColorUnscaled[bestI] = static_cast<uint8_t>(bestPackedC0);
-    results.mBlockColorUnscaled[sNextComp[bestI]] = static_cast<uint8_t>(bestPackedC1);
-    results.mBlockColorUnscaled[sNextComp[bestI + 1]] = static_cast<uint8_t>(bestPackedC2);
+    const uint32_t bestPackedC0 = etcConfigBase(static_cast<uint32_t>(search.bestX));
+    results.mBlockColorUnscaled[search.bestI] = static_cast<uint8_t>(bestPackedC0);
+    results.mBlockColorUnscaled[sNextComp[search.bestI]] = static_cast<uint8_t>(search.bestPackedC1);
+    results.mBlockColorUnscaled[sNextComp[search.bestI + 1]] = static_cast<uint8_t>(search.bestPackedC2);
     results.mError = bestError;
 
     return bestError;
@@ -2314,178 +2290,87 @@ static void ditherBlock555(ColorQuad* dest, const ColorQuad* block) {
     }
 }
 
-uint32_t packEtc1Block(void* etc1Block, const uint32_t* srcPixelsRgba, Etc1PackParams& packParams) {
-    const auto* srcPixels = std::bit_cast<const ColorQuad*>(srcPixelsRgba);
-    Etc1Block& dstBlock = *static_cast<Etc1Block*>(etc1Block);
+// Gathers the 8 pixels of one subblock into a contiguous array. Flipped subblocks are two
+// horizontal 4x2 strips; non-flipped subblocks are two vertical 2x4 strips.
+static void gatherSubblockPixels(ColorQuad* dst, const ColorQuad* srcPixels, uint32_t subblock, uint32_t flip) {
+    if (flip) {
+        std::memcpy(dst, srcPixels + static_cast<size_t>(subblock) * sSubblockPixels, sizeof(ColorQuad) * sSubblockPixels);
+    } else {
+        const ColorQuad* srcCol = srcPixels + static_cast<size_t>(subblock) * 2;
+        dst[0] = srcCol[0];
+        dst[1] = srcCol[sBlockWidth];
+        dst[2] = srcCol[static_cast<std::size_t>(2) * sBlockWidth];
+        dst[3] = srcCol[static_cast<std::size_t>(3) * sBlockWidth];
+        dst[4] = srcCol[1];
+        dst[5] = srcCol[1 + sBlockWidth];
+        dst[6] = srcCol[1 + 2 * sBlockWidth];
+        dst[7] = srcCol[1 + 3 * sBlockWidth];
+    }
+}
 
-    if (sBuildDebug) {
-        // Ensure all alpha values are 0xFF.
-        for (uint32_t i = 0; i < sPixelsPerBlock; i++) {
-            assert(srcPixels[i].a == sColorChannelMax);
+// Selects the initial lattice scan deltas for the current quality setting.
+static void setInitialScanDeltas(Etc1Optimizer::Params& params) {
+    if (params.mQuality == Etc1Quality::High) {
+        static const std::array<int, 9> sScanDelta0To4 = {-4, -3, -2, -1, 0, 1, 2, 3, 4};
+        params.mScanDeltaSize = static_cast<uint32_t>(std::size(sScanDelta0To4));
+        params.mScanDeltas = sScanDelta0To4.data();
+    } else if (params.mQuality == Etc1Quality::Medium) {
+        static const std::array<int, 3> sScanDelta0To1 = {-1, 0, 1};
+        params.mScanDeltaSize = static_cast<uint32_t>(std::size(sScanDelta0To1));
+        params.mScanDeltas = sScanDelta0To1.data();
+    } else {
+        static const std::array<int, 1> sScanDelta0 = {0};
+        params.mScanDeltaSize = static_cast<uint32_t>(std::size(sScanDelta0));
+        params.mScanDeltas = sScanDelta0.data();
+    }
+}
+
+// Widens the lattice scan deltas for a second optimizer pass, driven by the subblock's error.
+static void setRefinementScanDeltas(Etc1Optimizer::Params& params, uint32_t subblockError) {
+    constexpr uint32_t refinementErrorThresh1 = 6000;
+    if (params.mQuality == Etc1Quality::Medium) {
+        static const std::array<int, 4> sScanDelta2To3 = {-3, -2, 2, 3};
+        params.mScanDeltaSize = static_cast<uint32_t>(std::size(sScanDelta2To3));
+        params.mScanDeltas = sScanDelta2To3.data();
+    } else {
+        static const std::array<int, 2> sScanDelta5To5 = {-5, 5};
+        static const std::array<int, 8> sScanDelta5To8 = {-8, -7, -6, -5, 5, 6, 7, 8};
+        if (subblockError > refinementErrorThresh1) {
+            params.mScanDeltaSize = static_cast<uint32_t>(std::size(sScanDelta5To8));
+            params.mScanDeltas = sScanDelta5To8.data();
+        } else {
+            params.mScanDeltaSize = static_cast<uint32_t>(std::size(sScanDelta5To5));
+            params.mScanDeltas = sScanDelta5To5.data();
         }
     }
+}
 
-    // Check for solid block.
-    const uint32_t firstPixelU32 = srcPixels->mU32;
+// Attempts the solid-color fast path for a subblock, writing into result (whose mError is reset to
+// the "no match" sentinel even when the subblock is not solid or quality is too low).
+static void trySolidSubblockColor(Etc1Optimizer::Results& result, const ColorQuad* subblockPixels,
+                                  Etc1PackParams& packParams, uint32_t useColor4,
+                                  const ColorQuad* baseColor5Unscaled) {
+    result.mError = sUint64Max;
+    const uint32_t subblockPixel0U32 = subblockPixels[0].mU32;
     int r;
-    for (r = 15; r >= 1; --r) {
-        if (srcPixels[r].mU32 != firstPixelU32) {
+    for (r = 7; r >= 1; --r) {
+        if (subblockPixels[r].mU32 != subblockPixel0U32) {
             break;
         }
     }
     if (!r) {
-        return static_cast<uint32_t>(16 * packEtc1BlockSolidColor(dstBlock, &srcPixels[0].r, packParams));
+        packEtc1BlockSolidColorConstrained(result, sSubblockPixels, &subblockPixels[0].r, packParams, !useColor4, baseColor5Unscaled);
     }
+}
 
-    std::array<ColorQuad, 16> ditheredPixels;
-    if (packParams.mDithering) {
-        ditherBlock555(ditheredPixels.data(), srcPixels);
-        srcPixels = ditheredPixels.data();
-    }
-
-    Etc1Optimizer optimizer;
-
-    uint64_t bestError = sUint64Max;
-    uint32_t bestFlip = false, bestUseColor4 = false;
-
-    std::array<std::array<uint8_t, sSubblockPixels>, 2> bestSelectors;
-    std::array<Etc1Optimizer::Results, 2> bestResults;
-    for (uint32_t i = 0; i < 2; i++) {
-        bestResults[i].mN = sSubblockPixels;
-        bestResults[i].mSelectors = bestSelectors[i].data();
-    }
-
-    std::array<std::array<uint8_t, sSubblockPixels>, 3> selectorScratch;
-    std::array<Etc1Optimizer::Results, 3> results;
-
-    for (uint32_t i = 0; i < 3; i++) {
-        results[i].mN = sSubblockPixels;
-        results[i].mSelectors = selectorScratch[i].data();
-    }
-
-    std::array<ColorQuad, sSubblockPixels> subblockPixels;
-
-    Etc1Optimizer::Params params(packParams);
-    params.mNumSrcPixels = sSubblockPixels;
-    params.mSrcPixels = subblockPixels.data();
-
-    for (uint32_t flip = 0; flip < 2; flip++) {
-        for (uint32_t useColor4 = 0; useColor4 < 2; useColor4++) {
-            uint64_t trialError = 0;
-
-            uint32_t subblock;
-            for (subblock = 0; subblock < 2; subblock++) {
-                if (flip) {
-                    std::memcpy(subblockPixels.data(), srcPixels + static_cast<size_t>(subblock) * sSubblockPixels, sizeof(ColorQuad) * sSubblockPixels);
-                } else {
-                    const ColorQuad* srcCol = srcPixels + static_cast<size_t>(subblock) * 2;
-                    subblockPixels[0] = srcCol[0];
-                    subblockPixels[1] = srcCol[sBlockWidth];
-                    subblockPixels[2] = srcCol[static_cast<std::size_t>(2) * sBlockWidth];
-                    subblockPixels[3] = srcCol[static_cast<std::size_t>(3) * sBlockWidth];
-                    subblockPixels[4] = srcCol[1];
-                    subblockPixels[5] = srcCol[1 + sBlockWidth];
-                    subblockPixels[6] = srcCol[1 + 2 * sBlockWidth];
-                    subblockPixels[7] = srcCol[1 + 3 * sBlockWidth];
-                }
-
-                results[2].mError = sUint64Max;
-                if ((params.mQuality >= Etc1Quality::Medium) && ((subblock) || (useColor4))) {
-                    const uint32_t subblockPixel0U32 = subblockPixels[0].mU32;
-                    for (r = 7; r >= 1; --r) {
-                        if (subblockPixels[r].mU32 != subblockPixel0U32) {
-                            break;
-                        }
-                    }
-                    if (!r) {
-                        packEtc1BlockSolidColorConstrained(results[2], sSubblockPixels, &subblockPixels[0].r, packParams, !useColor4, (subblock && !useColor4) ? &results[0].mBlockColorUnscaled : nullptr);
-                    }
-                }
-
-                params.mUseColor4 = (useColor4 != 0);
-                params.mConstrainAgainstBaseColor5 = false;
-
-                if ((!useColor4) && (subblock)) {
-                    params.mConstrainAgainstBaseColor5 = true;
-                    params.mBaseColor5 = results[0].mBlockColorUnscaled;
-                }
-
-                if (params.mQuality == Etc1Quality::High) {
-                    static const std::array<int, 9> sScanDelta0To4 = {-4, -3, -2, -1, 0, 1, 2, 3, 4};
-                    params.mScanDeltaSize = static_cast<uint32_t>(std::size(sScanDelta0To4));
-                    params.mScanDeltas = sScanDelta0To4.data();
-                } else if (params.mQuality == Etc1Quality::Medium) {
-                    static const std::array<int, 3> sScanDelta0To1 = {-1, 0, 1};
-                    params.mScanDeltaSize = static_cast<uint32_t>(std::size(sScanDelta0To1));
-                    params.mScanDeltas = sScanDelta0To1.data();
-                } else {
-                    static const std::array<int, 1> sScanDelta0 = {0};
-                    params.mScanDeltaSize = static_cast<uint32_t>(std::size(sScanDelta0));
-                    params.mScanDeltas = sScanDelta0.data();
-                }
-
-                optimizer.init(params, results[subblock]);
-                if (!optimizer.compute()) {
-                    break;
-                }
-
-                if (params.mQuality >= Etc1Quality::Medium) {
-                    // TODO: Fix fairly arbitrary/unrefined thresholds that control how far away to scan for potentially better solutions.
-                    const uint32_t refinementErrorThresh0 = 3000;
-                    const uint32_t refinementErrorThresh1 = 6000;
-                    if (results[subblock].mError > refinementErrorThresh0) {
-                        if (params.mQuality == Etc1Quality::Medium) {
-                            static const std::array<int, 4> sScanDelta2To3 = {-3, -2, 2, 3};
-                            params.mScanDeltaSize = static_cast<uint32_t>(std::size(sScanDelta2To3));
-                            params.mScanDeltas = sScanDelta2To3.data();
-                        } else {
-                            static const std::array<int, 2> sScanDelta5To5 = {-5, 5};
-                            static const std::array<int, 8> sScanDelta5To8 = {-8, -7, -6, -5, 5, 6, 7, 8};
-                            if (results[subblock].mError > refinementErrorThresh1) {
-                                params.mScanDeltaSize = static_cast<uint32_t>(std::size(sScanDelta5To8));
-                                params.mScanDeltas = sScanDelta5To8.data();
-                            } else {
-                                params.mScanDeltaSize = static_cast<uint32_t>(std::size(sScanDelta5To5));
-                                params.mScanDeltas = sScanDelta5To5.data();
-                            }
-                        }
-
-                        if (!optimizer.compute()) {
-                            break;
-                        }
-                    }
-
-                    if (results[2].mError < results[subblock].mError) {
-                        results[subblock] = results[2];
-                    }
-                }
-
-                trialError += results[subblock].mError;
-                if (trialError >= bestError) {
-                    break;
-                }
-            }
-
-            if (subblock < 2) {
-                continue;
-            }
-
-            bestError = trialError;
-            bestResults[0] = results[0];
-            bestResults[1] = results[1];
-            bestFlip = flip;
-            bestUseColor4 = useColor4;
-
-        } // useColor4
-
-    } // flip
-
+// Writes the color/intensity bytes (0-3) of the encoded block from the per-subblock optimizer results.
+static void encodeBlockColors(Etc1Block& dstBlock, const std::array<Etc1Optimizer::Results, 2>& bestResults, uint32_t useColor4, uint32_t bestFlip) {
     int dr = bestResults[1].mBlockColorUnscaled.r - bestResults[0].mBlockColorUnscaled.r;
     int dg = bestResults[1].mBlockColorUnscaled.g - bestResults[0].mBlockColorUnscaled.g;
     int db = bestResults[1].mBlockColorUnscaled.b - bestResults[0].mBlockColorUnscaled.b;
-    assert(bestUseColor4 || ((Etc1::minimum(dr, dg, db) >= ColorDeltaMin) && (Etc1::maximum(dr, dg, db) <= ColorDeltaMax)));
+    assert(useColor4 || ((Etc1::minimum(dr, dg, db) >= ColorDeltaMin) && (Etc1::maximum(dr, dg, db) <= ColorDeltaMax)));
 
-    if (bestUseColor4) {
+    if (useColor4) {
         dstBlock.mBytes[0] = static_cast<uint8_t>(bestResults[1].mBlockColorUnscaled.r | (bestResults[0].mBlockColorUnscaled.r << 4));
         dstBlock.mBytes[1] = static_cast<uint8_t>(bestResults[1].mBlockColorUnscaled.g | (bestResults[0].mBlockColorUnscaled.g << 4));
         dstBlock.mBytes[2] = static_cast<uint8_t>(bestResults[1].mBlockColorUnscaled.b | (bestResults[0].mBlockColorUnscaled.b << 4));
@@ -2504,8 +2389,12 @@ uint32_t packEtc1Block(void* etc1Block, const uint32_t* srcPixelsRgba, Etc1PackP
         dstBlock.mBytes[2] = static_cast<uint8_t>((bestResults[0].mBlockColorUnscaled.b << 3) | db);
     }
 
-    dstBlock.mBytes[3] = static_cast<uint8_t>((bestResults[1].mBlockIntenTable << 2) | (bestResults[0].mBlockIntenTable << 5) | ((~bestUseColor4 & 1) << 1) | bestFlip);
+    dstBlock.mBytes[3] = static_cast<uint8_t>((bestResults[1].mBlockIntenTable << 2) | (bestResults[0].mBlockIntenTable << 5) | ((~useColor4 & 1) << 1) | bestFlip);
+}
 
+// Writes the selector bytes (4-7) of the encoded block, reordering the per-subblock selector arrays
+// into the bit-interleaved ETC1 selector word order for the given flip mode.
+static void encodeBlockSelectors(Etc1Block& dstBlock, const std::array<Etc1Optimizer::Results, 2>& bestResults, uint32_t bestFlip) {
     uint32_t selector0 = 0, selector1 = 0;
     if (bestFlip) {
         // flipped:
@@ -2570,6 +2459,129 @@ uint32_t packEtc1Block(void* etc1Block, const uint32_t* srcPixelsRgba, Etc1PackP
     dstBlock.mBytes[5] = static_cast<uint8_t>(selector1 & sByteMask);
     dstBlock.mBytes[6] = static_cast<uint8_t>(selector0 >> sBitsPerByte);
     dstBlock.mBytes[7] = static_cast<uint8_t>(selector0 & sByteMask);
+}
+
+uint32_t packEtc1Block(void* etc1Block, const uint32_t* srcPixelsRgba, Etc1PackParams& packParams) {
+    const auto* srcPixels = std::bit_cast<const ColorQuad*>(srcPixelsRgba);
+    Etc1Block& dstBlock = *static_cast<Etc1Block*>(etc1Block);
+
+    if (sBuildDebug) {
+        // Ensure all alpha values are 0xFF.
+        for (uint32_t i = 0; i < sPixelsPerBlock; i++) {
+            assert(srcPixels[i].a == sColorChannelMax);
+        }
+    }
+
+    // Check for solid block.
+    const uint32_t firstPixelU32 = srcPixels->mU32;
+    int r;
+    for (r = 15; r >= 1; --r) {
+        if (srcPixels[r].mU32 != firstPixelU32) {
+            break;
+        }
+    }
+    if (!r) {
+        return static_cast<uint32_t>(16 * packEtc1BlockSolidColor(dstBlock, &srcPixels[0].r, packParams));
+    }
+
+    std::array<ColorQuad, 16> ditheredPixels;
+    if (packParams.mDithering) {
+        ditherBlock555(ditheredPixels.data(), srcPixels);
+        srcPixels = ditheredPixels.data();
+    }
+
+    Etc1Optimizer optimizer;
+
+    uint64_t bestError = sUint64Max;
+    uint32_t bestFlip = false, bestUseColor4 = false;
+
+    std::array<std::array<uint8_t, sSubblockPixels>, 2> bestSelectors;
+    std::array<Etc1Optimizer::Results, 2> bestResults;
+    for (uint32_t i = 0; i < 2; i++) {
+        bestResults[i].mN = sSubblockPixels;
+        bestResults[i].mSelectors = bestSelectors[i].data();
+    }
+
+    std::array<std::array<uint8_t, sSubblockPixels>, 3> selectorScratch;
+    std::array<Etc1Optimizer::Results, 3> results;
+
+    for (uint32_t i = 0; i < 3; i++) {
+        results[i].mN = sSubblockPixels;
+        results[i].mSelectors = selectorScratch[i].data();
+    }
+
+    std::array<ColorQuad, sSubblockPixels> subblockPixels;
+
+    Etc1Optimizer::Params params(packParams);
+    params.mNumSrcPixels = sSubblockPixels;
+    params.mSrcPixels = subblockPixels.data();
+
+    for (uint32_t flip = 0; flip < 2; flip++) {
+        for (uint32_t useColor4 = 0; useColor4 < 2; useColor4++) {
+            uint64_t trialError = 0;
+
+            uint32_t subblock;
+            for (subblock = 0; subblock < 2; subblock++) {
+                gatherSubblockPixels(subblockPixels.data(), srcPixels, subblock, flip);
+
+                results[2].mError = sUint64Max;
+                if ((params.mQuality >= Etc1Quality::Medium) && ((subblock) || (useColor4))) {
+                    trySolidSubblockColor(results[2], subblockPixels.data(), packParams, useColor4, (subblock && !useColor4) ? &results[0].mBlockColorUnscaled : nullptr);
+                }
+
+                params.mUseColor4 = (useColor4 != 0);
+                params.mConstrainAgainstBaseColor5 = false;
+
+                if ((!useColor4) && (subblock)) {
+                    params.mConstrainAgainstBaseColor5 = true;
+                    params.mBaseColor5 = results[0].mBlockColorUnscaled;
+                }
+
+                setInitialScanDeltas(params);
+
+                optimizer.init(params, results[subblock]);
+                if (!optimizer.compute()) {
+                    break;
+                }
+
+                if (params.mQuality >= Etc1Quality::Medium) {
+                    // TODO: Fix fairly arbitrary/unrefined thresholds that control how far away to scan for potentially better solutions.
+                    const uint32_t refinementErrorThresh0 = 3000;
+                    if (results[subblock].mError > refinementErrorThresh0) {
+                        setRefinementScanDeltas(params, results[subblock].mError);
+
+                        if (!optimizer.compute()) {
+                            break;
+                        }
+                    }
+
+                    if (results[2].mError < results[subblock].mError) {
+                        results[subblock] = results[2];
+                    }
+                }
+
+                trialError += results[subblock].mError;
+                if (trialError >= bestError) {
+                    break;
+                }
+            }
+
+            if (subblock < 2) {
+                continue;
+            }
+
+            bestError = trialError;
+            bestResults[0] = results[0];
+            bestResults[1] = results[1];
+            bestFlip = flip;
+            bestUseColor4 = useColor4;
+
+        } // useColor4
+
+    } // flip
+
+    encodeBlockColors(dstBlock, bestResults, bestUseColor4, bestFlip);
+    encodeBlockSelectors(dstBlock, bestResults, bestFlip);
 
     return static_cast<uint32_t>(bestError);
 }
