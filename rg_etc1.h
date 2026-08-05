@@ -2,50 +2,65 @@
 // Please see ZLIB license at the end of this file.
 #pragma once
 
+// Standalone type aliases, mirroring the PTCL-Tool typedefs.h they were originally shared with
+// so that this file can be built outside of PTCL-Tool.
+using u8  = unsigned char;
+using u16 = unsigned short;
+using u32 = unsigned int;
+using u64 = unsigned long long;
+using s32 = int;
+
 namespace rg_etc1
 {
-   // Unpacks an 8-byte ETC1 compressed block to a block of 4x4 32bpp RGBA pixels.
-   // Returns false if the block is invalid. Invalid blocks will still be unpacked with clamping.
-   // This function is thread safe, and does not dynamically allocate any memory.
-   // If preserve_alpha is true, the alpha channel of the destination pixels will not be overwritten. Otherwise, alpha will be set to 255.
-   bool unpack_etc1_block(const void *pETC1_block, unsigned int* pDst_pixels_rgba, bool preserve_alpha = false);
 
-   // Quality setting = the higher the quality, the slower. 
-   // To pack large textures, it is highly recommended to call pack_etc1_block() in parallel, on different blocks, from multiple threads (particularly when using cHighQuality).
-   enum etc1_quality
-   { 
-      cLowQuality,
-      cMediumQuality,
-      cHighQuality,
-   };
-      
-   struct etc1_pack_params
-   {
-      etc1_quality m_quality;
-      bool m_dithering;
-                              
-      inline etc1_pack_params() 
-      {
-         clear();
-      }
+// ========================================================================== //
 
-      void clear()
-      {
-         m_quality = cHighQuality;
-         m_dithering = false;
-      }
-   };
 
-   // Important: pack_etc1_block_init() must be called before calling pack_etc1_block().
-   void pack_etc1_block_init();
+// Unpacks an 8-byte ETC1 compressed block to a block of 4x4 32bpp RGBA pixels.
+// Returns false if the block is invalid. Invalid blocks will still be unpacked with clamping.
+// This function is thread safe, and does not dynamically allocate any memory.
+// If preserve_alpha is true, the alpha channel of the destination pixels will not be overwritten. Otherwise, alpha will be set to 255.
+bool unpack_etc1_block(const void* pETC1_block, u32* pDst_pixels_rgba, bool preserve_alpha = false);
 
-   // Packs a 4x4 block of 32bpp RGBA pixels to an 8-byte ETC1 block.
-   // 32-bit RGBA pixels must always be arranged as (R,G,B,A) (R first, A last) in memory, independent of platform endianness. A should always be 255.
-   // Returns squared error of result.
-   // This function is thread safe, and does not dynamically allocate any memory.
-   // pack_etc1_block() does not currently support "perceptual" colorspace metrics - it primarily optimizes for RGB RMSE.
-   unsigned int pack_etc1_block(void* pETC1_block, const unsigned int* pSrc_pixels_rgba, etc1_pack_params& pack_params);
-            
+
+// ========================================================================== //
+
+
+// Quality setting = the higher the quality, the slower.
+// To pack large textures, it is highly recommended to call pack_etc1_block() in parallel, on different blocks, from multiple threads (particularly when using High).
+enum class etc1_quality {
+    Low,
+    Medium,
+    High,
+};
+
+
+// ========================================================================== //
+
+
+struct etc1_pack_params {
+    etc1_quality m_quality = etc1_quality::High;
+    bool m_dithering = false;
+};
+
+
+// ========================================================================== //
+
+
+// Important: pack_etc1_block_init() must be called before calling pack_etc1_block().
+void pack_etc1_block_init();
+
+// Packs a 4x4 block of 32bpp RGBA pixels to an 8-byte ETC1 block.
+// 32-bit RGBA pixels must always be arranged as (R,G,B,A) (R first, A last) in memory, independent of platform endianness. A should always be 255.
+// Returns squared error of result.
+// This function is thread safe, and does not dynamically allocate any memory.
+// pack_etc1_block() does not currently support "perceptual" colorspace metrics - it primarily optimizes for RGB RMSE.
+u32 pack_etc1_block(void* pETC1_block, const u32* pSrc_pixels_rgba, etc1_pack_params& pack_params);
+
+
+// ========================================================================== //
+
+
 } // namespace rg_etc1
 
 //------------------------------------------------------------------------------
