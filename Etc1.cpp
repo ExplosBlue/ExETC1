@@ -12,6 +12,7 @@
 #include "Etc1.h"
 
 #include <array>
+#include <bit>
 #include <cassert>
 #include <cmath>
 #include <cstdlib>
@@ -1280,7 +1281,7 @@ bool unpackEtc1Block(const void* etc1Block, uint32_t* dstPixelsRgba, bool preser
 }
 
 struct Etc1SolutionCoordinates {
-    inline Etc1SolutionCoordinates() : 
+    inline Etc1SolutionCoordinates() :
         mUnscaledColor(0, 0, 0, 0),
         mIntenTable(0),
         mColor4(false) {}
@@ -1418,7 +1419,7 @@ public:
 
 private:
     struct PotentialSolution {
-        PotentialSolution() : 
+        PotentialSolution() :
             mCoords() {}
 
         Etc1SolutionCoordinates mCoords;
