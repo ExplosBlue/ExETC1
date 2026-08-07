@@ -1735,7 +1735,12 @@ static EvaluateIntenTablesFunc getEvaluateIntenTablesFunc() {
     }();
     return sFunc;
 }
+#else
 
+// Non-x86-64 (e.g. arm64): no SIMD kernels, dispatch straight to the scalar one.
+static EvaluateIntenTablesFunc getEvaluateIntenTablesFunc() {
+    return &evaluateIntenTablesScalar;
+}
 #endif // x86-64
 
 bool Etc1Optimizer::compute() {
